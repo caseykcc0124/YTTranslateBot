@@ -2,6 +2,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// 設置環境變量以減少 yt-dlp 警告
+process.env.PYTHONWARNINGS = 'ignore';
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -27,6 +30,25 @@ app.use((req, res, next) => {
 
       if (logLine.length > 80) {
         logLine = logLine.slice(0, 79) + "…";
+      }
+
+      // 檢查是否為輪詢端點，如果是且沒有設置 DEBUG_POLLING 則不記錄
+      const isPollingEndpoint = [
+        '/api/videos',
+        '/api/translation-tasks',
+        '/api/notifications/unread',
+        '/api/videos/',
+        '/api/notifications'
+      ].some(endpoint => {
+        if (endpoint.endsWith('/')) {
+          return path.startsWith(endpoint);
+        }
+        return path === endpoint || path.startsWith(endpoint + '/');
+      });
+
+      if (isPollingEndpoint && !process.env.DEBUG_POLLING) {
+        // 對於輪詢端點且未啟用 DEBUG_POLLING 時，跳過日誌記錄
+        return;
       }
 
       log(logLine);

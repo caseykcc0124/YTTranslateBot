@@ -104,46 +104,29 @@ export class OpenAIService {
   }
 
   async translateSubtitles(
-    subtitles: SubtitleEntry[], 
-    videoTitle: string,
-    model: string = DEFAULT_MODEL,
-    taiwanOptimization: boolean = true,
-    naturalTone: boolean = true
+    messages: Array<{role: 'system' | 'user' | 'assistant', content: string}>,
+    model: string = DEFAULT_MODEL
   ): Promise<SubtitleEntry[]> {
     try {
-      const systemPrompt = `You are a professional subtitle translator specializing in Traditional Chinese (Taiwan). 
-Your task is to translate subtitles while maintaining:
-1. Natural Taiwan Mandarin expressions and terminology
-2. Appropriate timing and length for subtitle display
-3. Cultural context and idiomatic expressions
-4. Proper punctuation and formatting for subtitles
-
-${taiwanOptimization ? 'Optimize for Taiwan-specific vocabulary and expressions.' : ''}
-${naturalTone ? 'Ensure the translation sounds natural and conversational.' : ''}
-
-Return the result as JSON in this exact format:
-{
-  "subtitles": [
-    {
-      "start": number,
-      "end": number, 
-      "text": "translated text"
-    }
-  ]
-}`;
-
-      const userPrompt = `Video Title: "${videoTitle}"
-
-Please translate these subtitles to Traditional Chinese (Taiwan):
-
-${JSON.stringify(subtitles, null, 2)}`;
+      // 記錄完整的請求消息
+      console.log("🌐 OpenAI API 翻譯請求詳情:");
+      console.log("🎯 Model:", model);
+      console.log("🌡️ Temperature:", 0.3);
+      console.log("📊 Response Format:", "json_object");
+      console.log("📝 完整请求消息:");
+      console.log("=".repeat(100));
+      messages.forEach((message, index) => {
+        console.log(`[消息 ${index + 1}] 角色: ${message.role}`);
+        console.log(`[消息 ${index + 1}] 内容长度: ${message.content.length} 字符`);
+        console.log(`[消息 ${index + 1}] 内容:`);
+        console.log(message.content);
+        console.log("-".repeat(80));
+      });
+      console.log("=".repeat(100));
 
       const response = await this.openai.chat.completions.create({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
+        messages,
         response_format: { type: 'json_object' },
         temperature: 0.3,
       });
@@ -161,41 +144,13 @@ ${JSON.stringify(subtitles, null, 2)}`;
   }
 
   async optimizeSubtitleTiming(
-    subtitles: SubtitleEntry[],
-    videoTitle: string,
+    messages: Array<{role: 'system' | 'user' | 'assistant', content: string}>,
     model: string = DEFAULT_MODEL
   ): Promise<SubtitleEntry[]> {
     try {
-      const systemPrompt = `You are a subtitle timing optimization expert. Your task is to:
-1. Adjust subtitle timing for optimal reading experience
-2. Ensure subtitles don't overlap inappropriately
-3. Maintain synchronization with speech patterns
-4. Split long subtitles into readable chunks
-5. Merge short subtitles when appropriate
-
-Return the result as JSON in this exact format:
-{
-  "subtitles": [
-    {
-      "start": number,
-      "end": number,
-      "text": "optimized text"
-    }
-  ]
-}`;
-
-      const userPrompt = `Video Title: "${videoTitle}"
-
-Please optimize the timing and chunking of these Traditional Chinese subtitles:
-
-${JSON.stringify(subtitles, null, 2)}`;
-
       const response = await this.openai.chat.completions.create({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
+        messages,
         response_format: { type: 'json_object' },
         temperature: 0.1,
       });
@@ -209,6 +164,47 @@ ${JSON.stringify(subtitles, null, 2)}`;
       return result.subtitles;
     } catch (error) {
       throw new Error(`Subtitle timing optimization failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+  }
+
+  async getChatCompletion(
+    messages: Array<{role: 'system' | 'user' | 'assistant', content: string}>, 
+    model: string = DEFAULT_MODEL, 
+    temperature: number = 0.3
+  ): Promise<string> {
+    try {
+      console.log(`🤖 OpenAI getChatCompletion:`, { 
+        model, 
+        messagesCount: messages.length, 
+        temperature 
+      });
+
+      // 记录完整的请求消息
+      console.log("📝 OpenAI 完整请求消息:");
+      console.log("=".repeat(100));
+      messages.forEach((message, index) => {
+        console.log(`[消息 ${index + 1}] 角色: ${message.role}`);
+        console.log(`[消息 ${index + 1}] 内容长度: ${message.content.length} 字符`);
+        console.log(`[消息 ${index + 1}] 内容:`);
+        console.log(message.content);
+        console.log("-".repeat(80));
+      });
+      console.log("=".repeat(100));
+
+      const response = await this.openai.chat.completions.create({
+        model,
+        messages,
+        temperature,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content in OpenAI response');
+      }
+
+      return content;
+    } catch (error) {
+      throw new Error(`OpenAI chat completion failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
   }
 }

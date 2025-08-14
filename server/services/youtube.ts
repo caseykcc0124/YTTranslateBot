@@ -5,6 +5,26 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { type InsertVideo } from '@shared/schema';
 
+/**
+ * 工具函數：打印YouTube操作分隔線
+ */
+function printYouTubeSeparator(operationName: string, url?: string) {
+  const separator = '─'.repeat(80);
+  const title = url ? `${operationName} - ${url}` : operationName;
+  console.log(`\n${separator}`);
+  console.log(`🎬 ${title}`);
+  console.log(`${separator}\n`);
+}
+
+/**
+ * 工具函數：打印YouTube操作完成
+ */
+function printYouTubeCompletion(operationName: string, success: boolean, details?: string) {
+  const status = success ? '✅ 成功' : '❌ 失敗';
+  const detailText = details ? ` - ${details}` : '';
+  console.log(`\n🎬 ${operationName} ${status}${detailText}\n`);
+}
+
 export interface YouTubeVideoInfo {
   youtubeId: string;
   title: string;
@@ -24,30 +44,36 @@ export class YouTubeService {
   }
 
   static async getVideoInfo(url: string): Promise<YouTubeVideoInfo> {
+    printYouTubeSeparator("影片資訊獲取", url);
+    
     const videoId = this.extractVideoId(url);
     if (!videoId) {
+      printYouTubeCompletion("影片資訊獲取", false, "無效的YouTube URL");
       throw new Error('Invalid YouTube URL');
     }
 
     // 嘗試多個方法來獲取影片資訊
     const methods = [
-      async () => await this.getInfoWithDistube(url),
-      async () => await this.getInfoWithYtdl(url),
-      async () => await this.getFallbackInfo(videoId, url)
+      { name: "@distube/ytdl-core", func: async () => await this.getInfoWithDistube(url) },
+      { name: "ytdl-core", func: async () => await this.getInfoWithYtdl(url) },
+      { name: "fallback", func: async () => await this.getFallbackInfo(videoId, url) }
     ];
 
     let lastError: Error | null = null;
 
     for (const method of methods) {
       try {
-        console.log('🔍 嘗試獲取影片資訊...');
-        return await method();
+        console.log(`🔍 嘗試使用 ${method.name} 獲取影片資訊...`);
+        const result = await method.func();
+        printYouTubeCompletion(`影片資訊獲取 (${method.name})`, true, `標題: ${result.title}`);
+        return result;
       } catch (error) {
-        console.warn('⚠️ 方法失敗，嘗試下一個...', error instanceof Error ? error.message : error);
+        console.warn(`⚠️ ${method.name} 方法失敗，嘗試下一個...`, error instanceof Error ? error.message : error);
         lastError = error instanceof Error ? error : new Error('Unknown error');
       }
     }
 
+    printYouTubeCompletion("影片資訊獲取", false, "所有方法都失敗");
     throw new Error(`Failed to get video info: ${lastError?.message || "All methods failed"}`);
   }
 
@@ -103,8 +129,7 @@ export class YouTubeService {
   }
 
   static async getVideoSubtitles(url: string): Promise<string | null> {
-    console.log("🎯 開始字幕獲取流程");
-    console.log("📹 目標影片:", url);
+    printYouTubeSeparator("字幕獲取流程", url);
     
     // 嘗試多種方法獲取字幕，先使用 yt-dlp，再回到原始方法
     const methods = [
@@ -118,9 +143,8 @@ export class YouTubeService {
         console.log(`🔄 嘗試使用 ${method.name} 獲取字幕...`);
         const result = await method.func();
         if (result) {
-          console.log(`✅ 使用 ${method.name} 成功獲取字幕`);
-          console.log("📏 字幕內容長度:", result.length);
-          console.log("📄 字幕格式檢測:", result.includes('<transcript>') ? 'XML' : (result.includes('WEBVTT') ? 'VTT' : '未知'));
+          const formatType = result.includes('<transcript>') ? 'XML' : (result.includes('WEBVTT') ? 'VTT' : '未知');
+          printYouTubeCompletion(`字幕獲取 (${method.name})`, true, `長度: ${result.length}, 格式: ${formatType}`);
           return result;
         } else {
           console.log(`⚪ ${method.name} 返回空結果 (可能沒有字幕)`);
@@ -133,7 +157,7 @@ export class YouTubeService {
       }
     }
 
-    console.log('❌ 所有字幕獲取方法都失敗了');
+    printYouTubeCompletion("字幕獲取", false, "所有方法都失敗");
     return null;
   }
 
@@ -150,10 +174,8 @@ export class YouTubeService {
 
       // 使用 yt-dlp 獲取自動生成的英文字幕
       const args = [
-        '--write-auto-subs',     // 獲取自動生成的字幕
-        '--write-subs',          // 獲取手動字幕
+        '--config-location', './yt-dlp.conf',  // 使用配置文件
         '--sub-langs', 'en',     // 只獲取英文字幕
-        '--sub-format', 'vtt',   // VTT 格式
         '--skip-download',       // 不下載影片
         url
       ];
@@ -170,12 +192,20 @@ export class YouTubeService {
       });
 
       childProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
+        const stderrText = data.toString();
+        // 只記錄實際錯誤，忽略 ffmpeg 和 impersonation 警告
+        if (!stderrText.includes('WARNING:') && 
+            !stderrText.includes('ffmpeg not found') &&
+            !stderrText.includes('impersonate target is available')) {
+          stderr += stderrText;
+        }
       });
 
       childProcess.on('close', async (code) => {
         console.log("📊 yt-dlp 輸出:", stdout);
-        console.log("🔍 yt-dlp 錯誤輸出:", stderr);
+        if (stderr.trim()) {
+          console.log("🔍 yt-dlp 錯誤輸出:", stderr);
+        }
 
         try {
           const { promises: fs } = await import('fs');
@@ -252,8 +282,27 @@ export class YouTubeService {
       return null;
     }
 
-    const response = await fetch(track.baseUrl);
-    return await response.text();
+    // 優先獲取 VTT 格式以避免 rolling captions 重複問題
+    const subtitleUrl = track.baseUrl.includes('?') 
+      ? `${track.baseUrl}&fmt=vtt`
+      : `${track.baseUrl}?fmt=vtt`;
+    
+    console.log('📥 獲取字幕:', { 
+      languageCode: track.languageCode,
+      format: 'VTT (clean)',
+      url: subtitleUrl.substring(0, 100) + '...'
+    });
+
+    const response = await fetch(subtitleUrl);
+    const content = await response.text();
+    
+    // 檢查是否為 XML timedText 格式
+    if (content.includes('<transcript>')) {
+      console.log('📋 檢測到 timedText XML 格式，需要特殊解析');
+      return content; // 將在 SubtitleService 中處理
+    }
+    
+    return content;
   }
 
   private static async getSubtitlesWithYtdl(url: string): Promise<string | null> {
@@ -270,8 +319,27 @@ export class YouTubeService {
       return null;
     }
 
-    const response = await fetch(track.baseUrl);
-    return await response.text();
+    // 優先獲取 VTT 格式以避免 rolling captions 重複問題
+    const subtitleUrl = track.baseUrl.includes('?') 
+      ? `${track.baseUrl}&fmt=vtt`
+      : `${track.baseUrl}?fmt=vtt`;
+    
+    console.log('📥 獲取字幕 (ytdl):', { 
+      languageCode: track.languageCode,
+      format: 'VTT (clean)',
+      url: subtitleUrl.substring(0, 100) + '...'
+    });
+
+    const response = await fetch(subtitleUrl);
+    const content = await response.text();
+    
+    // 檢查是否為 XML timedText 格式
+    if (content.includes('<transcript>')) {
+      console.log('📋 檢測到 timedText XML 格式，需要特殊解析');
+      return content; // 將在 SubtitleService 中處理
+    }
+    
+    return content;
   }
 
   static async downloadVideo(url: string): Promise<Buffer> {

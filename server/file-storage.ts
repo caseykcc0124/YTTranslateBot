@@ -207,6 +207,22 @@ export class FileStorage implements IStorage {
     return this.memStorage.getAllVideos();
   }
 
+  async deleteVideo(id: string): Promise<boolean> {
+    const result = await this.memStorage.deleteVideo(id);
+    if (result) {
+      this.saveData();
+    }
+    return result;
+  }
+
+  async deleteVideoAndRelatedData(id: string): Promise<boolean> {
+    const result = await this.memStorage.deleteVideoAndRelatedData(id);
+    if (result) {
+      this.saveData();
+    }
+    return result;
+  }
+
   // 字幕相關方法
   async getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]> {
     return this.memStorage.getSubtitlesByVideoId(videoId);

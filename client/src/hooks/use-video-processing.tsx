@@ -28,18 +28,30 @@ export function useVideoProcessing() {
   const { data: currentVideo, isLoading: isVideoLoading } = useQuery<any>({
     queryKey: ["/api/videos", currentVideoId],
     enabled: !!currentVideoId,
-    refetchInterval: (data) => {
-      return data?.processingStatus === "processing" ? 2000 : false;
+    refetchInterval: (query) => {
+      return query.state.data?.processingStatus === "processing" ? 2000 : false;
     },
   });
 
   const { data: subtitles, isLoading: isSubtitlesLoading } = useQuery<any>({
     queryKey: ["/api/videos", currentVideoId, "subtitles"],
-    enabled: !!currentVideoId && currentVideo?.processingStatus === "completed",
+    enabled: !!currentVideoId && !!currentVideo && currentVideo.processingStatus === "completed",
   });
 
   const { data: recentVideos } = useQuery<any>({
     queryKey: ["/api/videos"],
+  });
+
+  // Get translation task for real-time progress
+  const { data: translationTask } = useQuery<any>({
+    queryKey: [`translation-task`, currentVideoId],
+    queryFn: () => api.getTranslationTask(currentVideoId!),
+    enabled: !!currentVideoId && !!currentVideo && currentVideo.processingStatus === "processing",
+    refetchInterval: 2000,
+    retry: (failureCount, error: any) => {
+      if (error?.status === 404 && failureCount >= 3) return false;
+      return failureCount < 3;
+    },
   });
 
   const processVideo = useCallback((url: string) => {
@@ -56,6 +68,7 @@ export function useVideoProcessing() {
     currentVideo,
     subtitles,
     recentVideos: recentVideos || [],
+    translationTask,
     
     // Loading states
     isProcessing: processVideoMutation.isPending,

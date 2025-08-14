@@ -2,6 +2,24 @@ import { apiRequest } from "./queryClient";
 
 export interface ProcessVideoRequest {
   url: string;
+  enhanced?: boolean;
+  enhancedConfig?: EnhancedTranslationRequest;
+}
+
+export interface EnhancedTranslationRequest {
+  userKeywords: string[];
+  stylePreference: string;
+  enableOriginalCorrection: boolean;
+  enablePreTranslationStitch: boolean;
+  enableStyleAdjustment: boolean;
+  enableSubtitleMerging: boolean;
+  maxMergeSegments: number;
+  maxMergeCharacters: number;
+  maxMergeDisplayTime: number;
+  maxParallelTasks: number;
+  retryAttempts: number;
+  timeoutPerStage: number;
+  customStylePrompt?: string;
 }
 
 export interface Video {
@@ -17,6 +35,11 @@ export interface Video {
   hasOriginalSubtitles: boolean;
   processingStatus: "pending" | "processing" | "completed" | "failed";
   createdAt?: string;
+  finalKeywords?: {
+    user: string[];
+    aiGenerated: string[];
+    final: string[];
+  };
 }
 
 export interface SubtitleEntry {
@@ -60,6 +83,7 @@ export interface TranslationTask {
   currentPhase?: string;
   translationSpeed?: number;
   estimatedTimeRemaining?: string;
+  featureExecutionStatus?: any; // 功能執行狀態
 }
 
 export interface TranslationProgress {
@@ -79,6 +103,12 @@ export const api = {
   // Video processing
   async processVideo(data: ProcessVideoRequest): Promise<Video> {
     const response = await apiRequest("POST", "/api/videos/process", data);
+    return response.json();
+  },
+
+  // Enhanced Translation
+  async processVideoEnhanced(data: ProcessVideoRequest & { enhancedConfig: EnhancedTranslationRequest }): Promise<Video> {
+    const response = await apiRequest("POST", "/api/videos/process-enhanced", data);
     return response.json();
   },
 
@@ -130,7 +160,7 @@ export const api = {
   },
 
   async performTaskAction(taskId: string, action: string): Promise<{ success: boolean; message: string }> {
-    const response = await apiRequest("POST", `/api/translation-tasks/${taskId}/action`, { action });
+    const response = await apiRequest("POST", `/api/translation-tasks/${taskId}/actions`, { action });
     return response.json();
   },
 

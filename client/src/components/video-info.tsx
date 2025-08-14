@@ -64,9 +64,18 @@ export default function VideoInfo({ videoId }: VideoInfoProps) {
 
   const descriptionData = processDescription(video?.description);
 
-  const handleDownload = async (format: string) => {
+  const handleDownload = async (format: string, type: 'translated' | 'original' | 'preprocessed' = 'translated') => {
     try {
-      const response = await fetch(`/api/videos/${videoId}/subtitles/download?format=${format}`);
+      let endpoint: string;
+      if (type === 'original') {
+        endpoint = `/api/videos/${videoId}/subtitles/download/original?format=${format}`;
+      } else if (type === 'preprocessed') {
+        endpoint = `/api/videos/${videoId}/subtitles/download/preprocessed?format=${format}`;
+      } else {
+        endpoint = `/api/videos/${videoId}/subtitles/download?format=${format}`;
+      }
+        
+      const response = await fetch(endpoint);
       
       if (!response.ok) {
         throw new Error('Download failed');
@@ -77,15 +86,33 @@ export default function VideoInfo({ videoId }: VideoInfoProps) {
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `${video?.title || 'subtitles'}.${format}`;
+      
+      let suffix: string;
+      if (type === 'original') {
+        suffix = '_original';
+      } else if (type === 'preprocessed') {
+        suffix = '_preprocessed';
+      } else {
+        suffix = '_translated';
+      }
+      a.download = `${video?.title || 'subtitles'}${suffix}.${format}`;
+      
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
+      let typeLabel: string;
+      if (type === 'original') {
+        typeLabel = '原始字幕';
+      } else if (type === 'preprocessed') {
+        typeLabel = '預處理字幕';
+      } else {
+        typeLabel = '翻譯字幕';
+      }
       toast({
         title: "下載成功",
-        description: `字幕檔已下載為 ${format.toUpperCase()} 格式`,
+        description: `${typeLabel}檔已下載為 ${format.toUpperCase()} 格式`,
       });
     } catch (error) {
       toast({
@@ -206,24 +233,90 @@ export default function VideoInfo({ videoId }: VideoInfoProps) {
               </div>
               
               {video.processingStatus === 'completed' && (
-                <div className="mt-6 space-y-2">
-                  <Button 
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => handleDownload('srt')}
-                    data-testid="button-download-srt"
-                  >
-                    <i className="fas fa-download mr-2"></i>
-                    下載 SRT 字幕檔
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    className="w-full"
-                    onClick={() => handleDownload('vtt')}
-                    data-testid="button-download-vtt"
-                  >
-                    <i className="fas fa-download mr-2"></i>
-                    下載 VTT 字幕檔
-                  </Button>
+                <div className="mt-6">
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">下載字幕</h5>
+                  
+                  {/* 翻譯字幕下載 */}
+                  <div className="space-y-2 mb-4">
+                    <div className="text-xs text-gray-600 mb-1">📝 翻譯字幕（繁體中文）</div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        size="sm"
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                        onClick={() => handleDownload('srt', 'translated')}
+                        data-testid="button-download-translated-srt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        SRT
+                      </Button>
+                      <Button 
+                        size="sm"
+                        variant="outline" 
+                        className="flex-1 text-xs"
+                        onClick={() => handleDownload('vtt', 'translated')}
+                        data-testid="button-download-translated-vtt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        VTT
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* 原始字幕下載 */}
+                  <div className="space-y-2 mb-4">
+                    <div className="text-xs text-gray-600 mb-1">🌐 原始字幕（英文）</div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs border-gray-300 text-gray-700 hover:bg-gray-50"
+                        onClick={() => handleDownload('srt', 'original')}
+                        data-testid="button-download-original-srt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        SRT
+                      </Button>
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs border-gray-300 text-gray-700 hover:bg-gray-50"
+                        onClick={() => handleDownload('vtt', 'original')}
+                        data-testid="button-download-original-vtt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        VTT
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* 預處理字幕下載 */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-orange-700">預處理字幕 (修正過但翻譯前)</p>
+                    <div className="flex space-x-2">
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                        onClick={() => handleDownload('srt', 'preprocessed')}
+                        data-testid="button-download-preprocessed-srt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        SRT
+                      </Button>
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                        onClick={() => handleDownload('vtt', 'preprocessed')}
+                        data-testid="button-download-preprocessed-vtt"
+                      >
+                        <i className="fas fa-download mr-1 text-xs"></i>
+                        VTT
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* 分享按鈕 */}
                   <Button 
                     variant="outline" 
                     className="w-full"

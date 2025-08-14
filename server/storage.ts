@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Video, type InsertVideo, type Subtitle, type InsertSubtitle, type LLMConfiguration, type InsertLLMConfiguration, type TranslationTask, type InsertTranslationTask, type SegmentTask, type InsertSegmentTask, type TaskNotificationRecord, type InsertTaskNotification } from "@shared/schema";
+import { type User, type InsertUser, type Video, type InsertVideo, type Subtitle, type SubtitleEntry, type InsertSubtitle, type LLMConfiguration, type InsertLLMConfiguration, type TranslationTask, type InsertTranslationTask, type SegmentTask, type InsertSegmentTask, type TaskNotificationRecord, type InsertTaskNotification } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -13,6 +13,8 @@ export interface IStorage {
   createVideo(video: InsertVideo): Promise<Video>;
   updateVideo(id: string, updates: Partial<Video>): Promise<Video | undefined>;
   getAllVideos(): Promise<Video[]>;
+  deleteVideo(id: string): Promise<boolean>;
+  deleteVideoAndRelatedData(id: string): Promise<boolean>;
   
   // Subtitles
   getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]>;
@@ -138,6 +140,48 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async deleteVideo(id: string): Promise<boolean> {
+    return this.videos.delete(id);
+  }
+
+  async deleteVideoAndRelatedData(id: string): Promise<boolean> {
+    // Delete the video
+    const videoDeleted = this.videos.delete(id);
+    
+    if (videoDeleted) {
+      // Delete all related subtitles
+      for (const [subtitleId, subtitle] of Array.from(this.subtitles.entries())) {
+        if (subtitle.videoId === id) {
+          this.subtitles.delete(subtitleId);
+        }
+      }
+      
+      // Delete all related translation tasks
+      for (const [taskId, task] of Array.from(this.translationTasks.entries())) {
+        if (task.videoId === id) {
+          // Delete related segment tasks
+          for (const [segmentId, segmentTask] of Array.from(this.segmentTasks.entries())) {
+            if (segmentTask.translationTaskId === taskId) {
+              this.segmentTasks.delete(segmentId);
+            }
+          }
+          
+          // Delete related notifications
+          for (const [notificationId, notification] of Array.from(this.taskNotifications.entries())) {
+            if (notification.translationTaskId === taskId) {
+              this.taskNotifications.delete(notificationId);
+            }
+          }
+          
+          // Delete the translation task
+          this.translationTasks.delete(taskId);
+        }
+      }
+    }
+    
+    return videoDeleted;
+  }
+
   // Subtitles
   async getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]> {
     return Array.from(this.subtitles.values()).filter(
@@ -157,7 +201,7 @@ export class MemStorage implements IStorage {
       id,
       videoId: insertSubtitle.videoId,
       language: insertSubtitle.language,
-      content: insertSubtitle.content,
+      content: insertSubtitle.content as SubtitleEntry[],
       source: insertSubtitle.source,
       contentHash: insertSubtitle.contentHash || null,
       translationModel: insertSubtitle.translationModel || null,
@@ -272,7 +316,7 @@ export class MemStorage implements IStorage {
     const cutoffTime = Date.now() - maxAgeHours * 60 * 60 * 1000;
     let cleanedCount = 0;
 
-    for (const [id, subtitle] of this.subtitles.entries()) {
+    for (const [id, subtitle] of Array.from(this.subtitles.entries())) {
       if (subtitle.isCached && subtitle.createdAt && subtitle.createdAt.getTime() < cutoffTime) {
         this.subtitles.delete(id);
         cleanedCount++;
@@ -350,7 +394,7 @@ export class MemStorage implements IStorage {
       processingTimeMs: insertTask.processingTimeMs || null,
       retryCount: insertTask.retryCount || 0,
       errorMessage: insertTask.errorMessage || null,
-      partialResult: insertTask.partialResult || null,
+      partialResult: (insertTask.partialResult as SubtitleEntry[]) || null,
       startedAt: insertTask.startedAt || null,
       completedAt: insertTask.completedAt || null,
       createdAt: new Date(),

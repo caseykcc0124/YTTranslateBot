@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { storage } from '../storage';
-import type { SubtitleEntry, TranslationConfig, LLMConfiguration } from '@shared/schema';
+import type { SubtitleEntry, TranslationConfig, LLMConfiguration, EnhancedTranslationConfig } from '@shared/schema';
 
 export class CacheService {
   /**
@@ -16,6 +16,44 @@ export class CacheService {
    */
   static generateConfigHash(config: TranslationConfig): string {
     const configString = JSON.stringify(config, Object.keys(config).sort());
+    return crypto.createHash('md5').update(configString, 'utf8').digest('hex');
+  }
+
+  /**
+   * 生成增強翻譯配置的哈希值（包含關鍵字）
+   */
+  static generateEnhancedConfigHash(config: EnhancedTranslationConfig): string {
+    // 創建包含所有相關配置的簡化對象
+    const hashableConfig = {
+      // 基礎翻譯配置
+      model: config.model,
+      taiwanOptimization: config.taiwanOptimization,
+      naturalTone: config.naturalTone,
+      
+      // 處理階段開關
+      enableOriginalCorrection: config.enableOriginalCorrection,
+      enablePreTranslationStitch: config.enablePreTranslationStitch,
+      enableStyleAdjustment: config.enableStyleAdjustment,
+      
+      // 風格配置
+      stylePreference: config.stylePreference,
+      customStylePrompt: config.customStylePrompt,
+      
+      // 字幕合併配置
+      enableSubtitleMerging: config.enableSubtitleMerging,
+      enableCompleteSentenceMerging: config.enableCompleteSentenceMerging,
+      maxMergeSegments: config.maxMergeSegments,
+      maxMergeCharacters: config.maxMergeCharacters,
+      maxMergeDisplayTime: config.maxMergeDisplayTime,
+      
+      // 處理配置
+      segmentationPreference: config.segmentationPreference,
+      maxParallelTasks: config.maxParallelTasks,
+      retryAttempts: config.retryAttempts,
+      timeoutPerStage: config.timeoutPerStage
+    };
+    
+    const configString = JSON.stringify(hashableConfig, Object.keys(hashableConfig).sort());
     return crypto.createHash('md5').update(configString, 'utf8').digest('hex');
   }
 
@@ -174,7 +212,7 @@ export class CacheService {
           translationConfig,
           isCached: true,
           accessCount: "0",
-          lastAccessedAt: new Date()
+          lastAccessedAt: new Date().toISOString()
         });
         console.log("✅ 新翻譯結果已儲存為快取");
       }
@@ -197,7 +235,7 @@ export class CacheService {
     try {
       await storage.updateSubtitle(subtitleId, {
         accessCount,
-        lastAccessedAt: new Date()
+        lastAccessedAt: new Date().toISOString()
       });
       console.log("📈 更新快取統計:", { subtitleId, accessCount });
     } catch (error) {
@@ -225,7 +263,7 @@ export class CacheService {
         translationConfig: updates.translationConfig,
         isCached: updates.isCached,
         accessCount: updates.accessCount,
-        lastAccessedAt: new Date()
+        lastAccessedAt: new Date().toISOString()
       });
       console.log("🔄 更新翻譯快取內容:", { subtitleId, updatesCount: Object.keys(updates).length });
     } catch (error) {
@@ -290,7 +328,127 @@ export class CacheService {
       taiwanOptimization: llmConfig.taiwanOptimization ?? true,
       naturalTone: llmConfig.naturalTone ?? true,
       subtitleTiming: llmConfig.subtitleTiming ?? true,
-      provider: llmConfig.provider
+      provider: llmConfig.provider,
+      enablePunctuationAdjustment: true
     };
+  }
+
+  /**
+   * 檢查增強翻譯結果快取
+   * @param youtubeId YouTube影片ID
+   * @param targetLanguage 目標語言
+   * @param sourceSubtitles 原始字幕
+   * @param enhancedConfig 增強翻譯配置
+   * @returns 如果找到快取則返回字幕，否則返回null
+   */
+  static async checkEnhancedTranslationCache(
+    youtubeId: string,
+    targetLanguage: string,
+    sourceSubtitles: SubtitleEntry[],
+    enhancedConfig: EnhancedTranslationConfig
+  ): Promise<SubtitleEntry[] | null> {
+    try {
+      console.log("🔍 檢查增強翻譯快取...", {
+        youtubeId,
+        targetLanguage,
+        sourceSubtitlesCount: sourceSubtitles.length,
+        enabledFeatures: {
+          originalCorrection: enhancedConfig.enableOriginalCorrection,
+          styleAdjustment: enhancedConfig.enableStyleAdjustment,
+          subtitleMerging: enhancedConfig.enableSubtitleMerging
+        }
+      });
+
+      // 首先通過 YouTube ID 找到影片
+      const video = await storage.getVideoByYoutubeId(youtubeId);
+      if (!video) {
+        console.log("❌ 未找到影片記錄，無法檢查快取");
+        return null;
+      }
+
+      // 生成當前內容和配置的哈希值
+      const contentHash = this.generateContentHash(sourceSubtitles);
+      const configHash = this.generateEnhancedConfigHash(enhancedConfig);
+
+      console.log("🔑 增強翻譯快取檢查參數:", {
+        videoId: video.id,
+        contentHash: contentHash.substring(0, 16) + "...",
+        configHash: configHash.substring(0, 16) + "...",
+        targetLanguage
+      });
+
+      // 查找已存在的翻譯字幕
+      const existingSubtitle = await storage.getSubtitleByVideoAndLanguage(video.id, targetLanguage);
+      
+      if (!existingSubtitle) {
+        console.log("📝 未找到現有翻譯，需要進行新的增強翻譯");
+        return null;
+      }
+
+      console.log("📋 找到現有翻譯記錄:", {
+        id: existingSubtitle.id,
+        source: existingSubtitle.source,
+        isCached: existingSubtitle.isCached,
+        hasContentHash: !!existingSubtitle.contentHash,
+        translationModel: existingSubtitle.translationModel,
+        subtitleCount: existingSubtitle.content.length,
+        createdAt: existingSubtitle.createdAt
+      });
+
+      // 檢查是否為增強翻譯字幕
+      if (existingSubtitle.source !== 'enhanced_translated' && existingSubtitle.source !== 'translated') {
+        console.log("⏭️ 現有字幕不是翻譯結果，跳過快取");
+        return null;
+      }
+
+      // 檢查內容哈希是否匹配
+      if (existingSubtitle.contentHash && existingSubtitle.contentHash !== contentHash) {
+        console.log("🔄 原始內容已變更，快取失效", {
+          cachedHash: existingSubtitle.contentHash.substring(0, 16) + "...",
+          currentHash: contentHash.substring(0, 16) + "..."
+        });
+        return null;
+      }
+
+      // 如果存在翻譯配置，檢查是否包含增強配置信息
+      if (existingSubtitle.translationConfig) {
+        // 檢查是否為增強翻譯配置（包含關鍵字等擴展字段）
+        const existingConfig = existingSubtitle.translationConfig;
+        const isEnhancedConfig = 'keywordExtraction' in existingConfig;
+        
+        if (isEnhancedConfig) {
+          const existingConfigHash = this.generateEnhancedConfigHash(existingConfig as any);
+          if (existingConfigHash !== configHash) {
+            console.log("⚙️ 增強翻譯配置已變更，快取失效", {
+              cachedConfigHash: existingConfigHash.substring(0, 16) + "...",
+              currentConfigHash: configHash.substring(0, 16) + "..."
+            });
+            return null;
+          }
+        } else {
+          // 如果當前是增強配置但快取的是基礎配置，則失效
+          console.log("🔄 當前為增強翻譯配置但快取為基礎配置，快取失效");
+          return null;
+        }
+      }
+
+      // 更新快取統計
+      const newAccessCount = String(parseInt(existingSubtitle.accessCount || "0") + 1);
+      await this.updateCacheStats(existingSubtitle.id, newAccessCount);
+
+      console.log("✅ 增強翻譯快取命中！返回已翻譯的字幕", {
+        subtitleCount: existingSubtitle.content.length,
+        accessCount: newAccessCount,
+        model: existingSubtitle.translationModel,
+        source: existingSubtitle.source,
+        cacheAge: existingSubtitle.createdAt ? 
+          Math.round((Date.now() - existingSubtitle.createdAt.getTime()) / (1000 * 60 * 60)) + "小時" : "未知"
+      });
+
+      return existingSubtitle.content;
+    } catch (error) {
+      console.error("❌ 檢查增強翻譯快取時發生錯誤:", error);
+      return null; // 出錯時不使用快取，繼續正常翻譯流程
+    }
   }
 }

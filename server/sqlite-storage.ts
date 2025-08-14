@@ -166,7 +166,7 @@ export class SQLiteStorage implements IStorage {
   private addColumnIfNotExists(tableName: string, columnName: string, columnDef: string) {
     try {
       // 檢查欄位是否存在
-      const pragma = this.db.pragma(`table_info(${tableName})`);
+      const pragma = this.db.pragma(`table_info(${tableName})`) as any[];
       const columnExists = pragma.some((row: any) => row.name === columnName);
       
       if (!columnExists) {
@@ -278,6 +278,44 @@ export class SQLiteStorage implements IStorage {
     return rows.map(row => this.mapRowToVideo(row));
   }
 
+  async deleteVideo(id: string): Promise<boolean> {
+    const stmt = this.db.prepare('DELETE FROM videos WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  async deleteVideoAndRelatedData(id: string): Promise<boolean> {
+    const transaction = this.db.transaction(() => {
+      // Delete related task notifications first (due to foreign key constraints)
+      this.db.prepare(`
+        DELETE FROM task_notifications 
+        WHERE translation_task_id IN (
+          SELECT id FROM translation_tasks WHERE video_id = ?
+        )
+      `).run(id);
+      
+      // Delete related segment tasks
+      this.db.prepare(`
+        DELETE FROM segment_tasks 
+        WHERE translation_task_id IN (
+          SELECT id FROM translation_tasks WHERE video_id = ?
+        )
+      `).run(id);
+      
+      // Delete related translation tasks
+      this.db.prepare('DELETE FROM translation_tasks WHERE video_id = ?').run(id);
+      
+      // Delete related subtitles
+      this.db.prepare('DELETE FROM subtitles WHERE video_id = ?').run(id);
+      
+      // Delete the video
+      const result = this.db.prepare('DELETE FROM videos WHERE id = ?').run(id);
+      return result.changes > 0;
+    });
+    
+    return transaction();
+  }
+
   // 字幕
   async getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]> {
     const stmt = this.db.prepare('SELECT * FROM subtitles WHERE video_id = ?');
@@ -312,7 +350,10 @@ export class SQLiteStorage implements IStorage {
       insertSubtitle.translationConfig ? JSON.stringify(insertSubtitle.translationConfig) : null,
       insertSubtitle.isCached ? 1 : 0,
       insertSubtitle.accessCount || '0',
-      insertSubtitle.lastAccessedAt || null
+      insertSubtitle.lastAccessedAt ? 
+        (insertSubtitle.lastAccessedAt instanceof Date ? 
+          insertSubtitle.lastAccessedAt.toISOString() : 
+          insertSubtitle.lastAccessedAt) : null
     );
 
     const subtitle = await this.getSubtitle(id);
@@ -359,7 +400,9 @@ export class SQLiteStorage implements IStorage {
     }
     if (updates.lastAccessedAt !== undefined) {
       fields.push('last_accessed_at = ?');
-      values.push(updates.lastAccessedAt);
+      values.push(updates.lastAccessedAt instanceof Date ? 
+        updates.lastAccessedAt.toISOString() : 
+        updates.lastAccessedAt);
     }
 
     if (fields.length > 0) {

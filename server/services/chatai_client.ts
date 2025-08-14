@@ -18,6 +18,10 @@ export interface ChatCompletionRequest {
   messages: ChatMessage[];
   temperature?: number;
   stream?: boolean;
+  response_format?: {
+    type: "json_object" | "text";
+  };
+  response_mime_type?: string;
 }
 
 export interface ChatCompletionResponse {
@@ -193,11 +197,25 @@ export class ChatAIClient {
       model: request.model,
       messagesCount: request.messages?.length,
       temperature: request.temperature,
+      response_format: request.response_format,
+      response_mime_type: request.response_mime_type,
     });
     console.log("🔑 Headers:", {
       ...this.getAuthHeaders(),
       Authorization: this.getAuthHeaders().Authorization ? '[HIDDEN]' : 'None'
     });
+    
+    // 记录完整的消息内容
+    console.log("📝 完整请求消息:");
+    console.log("=".repeat(100));
+    request.messages.forEach((message, index) => {
+      console.log(`[消息 ${index + 1}] 角色: ${message.role}`);
+      console.log(`[消息 ${index + 1}] 内容长度: ${message.content.length} 字符`);
+      console.log(`[消息 ${index + 1}] 内容:`);
+      console.log(message.content);
+      console.log("-".repeat(80));
+    });
+    console.log("=".repeat(100));
     
     try {
       const response: AxiosResponse<ChatCompletionResponse> = await this.client.post(url, request, {

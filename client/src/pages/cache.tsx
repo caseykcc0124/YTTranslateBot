@@ -28,6 +28,9 @@ export default function Cache() {
               <Link href="/cache">
                 <a className="text-blue-600 hover:text-blue-800 font-medium">快取管理</a>
               </Link>
+              <Link href="/settings">
+                <a className="text-gray-700 hover:text-gray-900 font-medium">系統設定</a>
+              </Link>
             </nav>
           </div>
         </div>

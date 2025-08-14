@@ -77,40 +77,42 @@ export default function SubtitleSettings({
     return (
       <Button
         onClick={onToggle}
-        variant="outline"
+        variant="default"
         size="sm"
-        className="fixed top-20 right-4 z-40 bg-white/90 backdrop-blur-sm hover:bg-white/95 shadow-lg"
+        className="fixed top-20 right-4 z-40 bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
       >
         <i className="fas fa-cog mr-2"></i>
-        字幕設定
+        字幕外觀設定
       </Button>
     );
   }
 
   return (
-    <div className="fixed top-16 right-4 z-40 w-80">
-      <Card className="bg-white/95 backdrop-blur-sm shadow-2xl border border-gray-200">
-        <CardHeader className="pb-3">
+    <div className="fixed top-16 right-4 z-40 w-80 max-h-[calc(100vh-5rem)]">
+      <Card className="bg-white/95 backdrop-blur-sm shadow-2xl border border-gray-200 overflow-hidden">
+        <CardHeader className="pb-2 sticky top-0 bg-white/95 backdrop-blur-sm z-10 border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-bold text-gray-900 flex items-center">
-              <i className="fas fa-text-height mr-2 text-blue-600"></i>
+            <CardTitle className="text-base font-bold text-gray-900 flex items-center">
+              <i className="fas fa-text-height mr-2 text-blue-600 text-sm"></i>
               字幕外觀設定
             </CardTitle>
             <Button
               onClick={onToggle}
-              variant="ghost"
+              variant="destructive"
               size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100"
+              className="h-8 px-3 bg-red-500 hover:bg-red-600 text-white"
+              title="關閉設定面板"
             >
-              <i className="fas fa-times text-gray-500"></i>
+              <i className="fas fa-times mr-1"></i>
+              關閉
             </Button>
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 p-4 max-h-[calc(100vh-10rem)] overflow-y-auto">
           {/* 字體大小 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               字體大小: {localSettings.fontSize}px
             </Label>
             <Slider
@@ -125,45 +127,45 @@ export default function SubtitleSettings({
 
           {/* 字體粗細 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               字體粗細
             </Label>
             <RadioGroup
               value={localSettings.fontWeight}
               onValueChange={(value) => handleSettingChange('fontWeight', value)}
-              className="flex space-x-4"
+              className="flex space-x-3"
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="normal" id="normal" />
-                <Label htmlFor="normal" className="text-sm">正常</Label>
+              <div className="flex items-center space-x-1">
+                <RadioGroupItem value="normal" id="normal" className="h-3 w-3" />
+                <Label htmlFor="normal" className="text-xs cursor-pointer">正常</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="bold" id="bold" />
-                <Label htmlFor="bold" className="text-sm">粗體</Label>
+              <div className="flex items-center space-x-1">
+                <RadioGroupItem value="bold" id="bold" className="h-3 w-3" />
+                <Label htmlFor="bold" className="text-xs cursor-pointer">粗體</Label>
               </div>
             </RadioGroup>
           </div>
 
           {/* 字幕顏色 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               字幕顏色
             </Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1">
               {colorPresets.map((color) => (
                 <button
                   key={color.value}
                   onClick={() => handleSettingChange('color', color.value)}
-                  className={`w-full h-8 rounded-md border-2 transition-all ${
+                  className={`w-full h-7 rounded border-2 transition-all text-xs ${
                     localSettings.color === color.value 
-                      ? 'border-blue-500 ring-2 ring-blue-200' 
+                      ? 'border-blue-500 ring-1 ring-blue-200' 
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                   style={{ backgroundColor: color.value === 'transparent' ? '#f3f4f6' : color.value }}
                   title={color.name}
                 >
                   {color.value === 'transparent' && (
-                    <span className="text-xs text-gray-500">透明</span>
+                    <span className="text-gray-500">透明</span>
                   )}
                 </button>
               ))}
@@ -172,17 +174,17 @@ export default function SubtitleSettings({
 
           {/* 背景顏色 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               背景顏色
             </Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1">
               {backgroundColorPresets.map((color) => (
                 <button
                   key={color.value}
                   onClick={() => handleSettingChange('backgroundColor', color.value)}
-                  className={`w-full h-8 rounded-md border-2 transition-all ${
+                  className={`w-full h-7 rounded border-2 transition-all ${
                     localSettings.backgroundColor === color.value 
-                      ? 'border-blue-500 ring-2 ring-blue-200' 
+                      ? 'border-blue-500 ring-1 ring-blue-200' 
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                   style={{ 
@@ -205,7 +207,7 @@ export default function SubtitleSettings({
           {/* 透明度 */}
           {localSettings.backgroundColor !== 'transparent' && (
             <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2 block">
+              <Label className="text-xs font-medium text-gray-700 mb-1 block">
                 背景透明度: {localSettings.opacity}%
               </Label>
               <Slider
@@ -221,66 +223,66 @@ export default function SubtitleSettings({
 
           {/* 字幕位置 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               字幕位置
             </Label>
             <RadioGroup
               value={localSettings.position}
               onValueChange={(value) => handleSettingChange('position', value)}
-              className="space-y-2"
+              className="flex space-x-3"
             >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="top" id="top" />
-                <Label htmlFor="top" className="text-sm">頂部</Label>
+              <div className="flex items-center space-x-1">
+                <RadioGroupItem value="top" id="top" className="h-3 w-3" />
+                <Label htmlFor="top" className="text-xs cursor-pointer">頂部</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="center" id="center" />
-                <Label htmlFor="center" className="text-sm">中間</Label>
+              <div className="flex items-center space-x-1">
+                <RadioGroupItem value="center" id="center" className="h-3 w-3" />
+                <Label htmlFor="center" className="text-xs cursor-pointer">中間</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="bottom" id="bottom" />
-                <Label htmlFor="bottom" className="text-sm">底部</Label>
+              <div className="flex items-center space-x-1">
+                <RadioGroupItem value="bottom" id="bottom" className="h-3 w-3" />
+                <Label htmlFor="bottom" className="text-xs cursor-pointer">底部</Label>
               </div>
             </RadioGroup>
           </div>
 
           {/* 文字效果 */}
           <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               文字效果
             </Label>
-            <div className="space-y-2">
-              <label className="flex items-center space-x-2 cursor-pointer">
+            <div className="flex space-x-4">
+              <label className="flex items-center space-x-1 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={localSettings.shadow}
                   onChange={(e) => handleSettingChange('shadow', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3"
                 />
-                <span className="text-sm">陰影效果</span>
+                <span className="text-xs">陰影</span>
               </label>
-              <label className="flex items-center space-x-2 cursor-pointer">
+              <label className="flex items-center space-x-1 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={localSettings.outline}
                   onChange={(e) => handleSettingChange('outline', e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3 w-3"
                 />
-                <span className="text-sm">邊框效果</span>
+                <span className="text-xs">邊框</span>
               </label>
             </div>
           </div>
 
           {/* 預覽 */}
-          <div className="border-t pt-4">
-            <Label className="text-sm font-medium text-gray-700 mb-2 block">
+          <div className="border-t pt-3">
+            <Label className="text-xs font-medium text-gray-700 mb-1 block">
               預覽效果
             </Label>
-            <div className="relative bg-gray-900 rounded-lg h-16 flex items-center justify-center overflow-hidden">
+            <div className="relative bg-gray-900 rounded-lg h-14 flex items-center justify-center overflow-hidden">
               <div
-                className="px-4 py-2 rounded transition-all leading-relaxed"
+                className="px-3 py-1 rounded transition-all leading-relaxed"
                 style={{
-                  fontSize: `${localSettings.fontSize}px`,
+                  fontSize: `${localSettings.fontSize * 0.8}px`,
                   color: localSettings.color,
                   backgroundColor: localSettings.backgroundColor === 'transparent' 
                     ? 'transparent' 
@@ -293,21 +295,32 @@ export default function SubtitleSettings({
                   lineHeight: '1.2'
                 }}
               >
-                範例字幕文字 Sample Text
+                範例字幕 Sample
               </div>
             </div>
           </div>
 
           {/* 重設按鈕 */}
-          <Button
-            onClick={resetToDefaults}
-            variant="outline"
-            size="sm"
-            className="w-full"
-          >
-            <i className="fas fa-undo mr-2"></i>
-            重設為預設值
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={resetToDefaults}
+              variant="outline"
+              size="sm"
+              className="flex-1 h-8 text-xs"
+            >
+              <i className="fas fa-undo mr-1 text-xs"></i>
+              重設預設值
+            </Button>
+            <Button
+              onClick={onToggle}
+              variant="secondary"
+              size="sm"
+              className="flex-1 h-8 text-xs"
+            >
+              <i className="fas fa-check mr-1 text-xs"></i>
+              完成設定
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

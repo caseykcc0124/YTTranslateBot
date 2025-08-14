@@ -4,6 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import SubtitleSettings, { SubtitleSettings as SubtitleSettingsType } from "@/components/subtitle-settings";
+import { 
+  SubtitleTimingControls, 
+  getCurrentAdjustedSubtitle 
+} from "@/components/subtitle-timing-panel";
 import { usePartialSubtitles } from "@/hooks/use-partial-subtitles";
 
 // YouTube API 類型定義
@@ -51,6 +55,17 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
     };
   });
 
+  // 字幕時間軸調整設定
+  const [showTimingPanel, setShowTimingPanel] = useState(false);
+  const [subtitleTiming, setSubtitleTiming] = useState<SubtitleTimingControls>(() => {
+    const saved = localStorage.getItem('ytTranslateBot-subtitleTiming');
+    return saved ? JSON.parse(saved) : {
+      offset: 0,
+      speedRate: 1.0,
+      enabled: false,
+    };
+  });
+
   const { data: video } = useQuery<any>({
     queryKey: ["/api/videos", videoId],
   });
@@ -82,8 +97,11 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
   const activeSubtitles = subtitles?.content || partialSubtitles;
   const isUsingPartialSubtitles = !subtitles?.content && hasPartialResults;
 
-  const currentSubtitle = activeSubtitles?.find((sub: SubtitleEntry) => 
-    currentTime >= sub.start && currentTime <= sub.end
+  // 使用調整後的時間軸來獲取當前字幕
+  const currentSubtitle = getCurrentAdjustedSubtitle(
+    activeSubtitles,
+    currentTime,
+    subtitleTiming
   );
 
   // 載入 YouTube API
@@ -191,6 +209,65 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
     setSubtitleSettings(newSettings);
     localStorage.setItem('ytTranslateBot-subtitleSettings', JSON.stringify(newSettings));
   };
+
+  // 保存字幕時間軸調整到本地存儲
+  const handleSubtitleTimingChange = (newTiming: SubtitleTimingControls) => {
+    setSubtitleTiming(newTiming);
+    localStorage.setItem('ytTranslateBot-subtitleTiming', JSON.stringify(newTiming));
+  };
+
+  // 快捷鍵處理
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!e.shiftKey) return;
+
+      switch(e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          handleSubtitleTimingChange({
+            ...subtitleTiming,
+            offset: Math.max(-10, subtitleTiming.offset - 0.5),
+            enabled: true
+          });
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          handleSubtitleTimingChange({
+            ...subtitleTiming,
+            offset: Math.min(10, subtitleTiming.offset + 0.5),
+            enabled: true
+          });
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          handleSubtitleTimingChange({
+            ...subtitleTiming,
+            speedRate: Math.min(1.2, subtitleTiming.speedRate + 0.05),
+            enabled: true
+          });
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          handleSubtitleTimingChange({
+            ...subtitleTiming,
+            speedRate: Math.max(0.8, subtitleTiming.speedRate - 0.05),
+            enabled: true
+          });
+          break;
+        case '0':
+          e.preventDefault();
+          handleSubtitleTimingChange({
+            offset: 0,
+            speedRate: 1.0,
+            enabled: false
+          });
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [subtitleTiming]);
 
   // 計算字幕位置樣式
   const getSubtitlePositionStyle = () => {
@@ -375,13 +452,24 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
                 <div>⏰ API時間: <span className="text-cyan-300">{currentTime.toFixed(2)}s</span></div>
                 <div>📝 當前字幕: <span className="text-green-300">{currentSubtitle ? `"${currentSubtitle.text.substring(0, 25)}..."` : '無'}</span></div>
                 <div>📊 字幕範圍: <span className="text-blue-300">{currentSubtitle ? `${currentSubtitle.start.toFixed(1)}-${currentSubtitle.end.toFixed(1)}s` : '無'}</span></div>
-                <div>🔢 總字幕數: <span className="text-purple-300">{subtitles?.content?.length || 0}</span></div>
+                <div>🔢 總字幕數: <span className="text-purple-300">{activeSubtitles?.length || 0}</span></div>
                 <div>🔗 API狀態: <span className={isPlayerReady ? 'text-green-400' : 'text-orange-400'}>{isPlayerReady ? 'API已連接' : '載入中'}</span></div>
                 <div>🎬 播放器: <span className={ytPlayer ? 'text-green-400' : 'text-red-400'}>{ytPlayer ? '已初始化' : '未就緒'}</span></div>
                 <div>📺 全螢幕: <span className={isFullscreen ? 'text-green-400' : 'text-gray-400'}>{isFullscreen ? '是' : '否'}</span></div>
                 <div>👁️ 字幕顯示: <span className={showSubtitles ? 'text-green-400' : 'text-gray-400'}>{showSubtitles ? '開啟' : '關閉'}</span></div>
                 <div>📐 字幕位置: <span className="text-orange-300">{subtitleSettings.position}</span></div>
                 <div>📏 字體大小: <span className="text-pink-300">{isFullscreen ? Math.max(28, subtitleSettings.fontSize + 8) : subtitleSettings.fontSize}px</span></div>
+                {/* 時間軸調整資訊 */}
+                {subtitleTiming.enabled && (
+                  <>
+                    <div className="border-t border-gray-600 mt-2 pt-2">
+                      <div className="text-yellow-400 mb-1">⏱️ 時間軸調整</div>
+                      <div>📍 偏移: <span className="text-cyan-300">{subtitleTiming.offset > 0 ? '+' : ''}{subtitleTiming.offset.toFixed(1)}秒</span></div>
+                      <div>⚡ 速度: <span className="text-green-300">{subtitleTiming.speedRate.toFixed(2)}x</span></div>
+                      <div>🎯 調整後時間: <span className="text-orange-300">{((currentTime - subtitleTiming.offset) * subtitleTiming.speedRate).toFixed(2)}s</span></div>
+                    </div>
+                  </>
+                )}
                 <div>🎨 字幕狀態: <span className="text-yellow-300">
                   {showSubtitles && currentSubtitle ? '應該顯示' : '不應顯示'}
                 </span></div>
@@ -399,6 +487,274 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
             </div>
           )}
         </div>
+        
+        {/* 字幕同步調整面板 - 內嵌在播放器下方 */}
+        {showTimingPanel && (
+          <div className="bg-gray-900 p-4 border-t border-gray-700">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-medium flex items-center">
+                  <i className="fas fa-clock mr-2 text-blue-400"></i>
+                  字幕微調
+                </h3>
+                <div className="flex items-center space-x-3">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={subtitleTiming.enabled}
+                      onChange={(e) => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        enabled: e.target.checked
+                      })}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-white text-sm">啟用</span>
+                  </label>
+                  <Button
+                    onClick={() => setShowTimingPanel(false)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-white hover:text-gray-300"
+                  >
+                    <i className="fas fa-times"></i>
+                  </Button>
+                </div>
+              </div>
+              
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${!subtitleTiming.enabled && 'opacity-50 pointer-events-none'}`}>
+                {/* 字幕偏移控制 */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-white text-sm font-medium">字幕偏移</label>
+                    <span className="text-blue-400 text-sm font-mono">
+                      {subtitleTiming.offset === 0 ? '同步' : 
+                       `${subtitleTiming.offset > 0 ? '+' : ''}${subtitleTiming.offset.toFixed(1)}秒`}
+                    </span>
+                  </div>
+                  
+                  {/* 偏移滑桿 */}
+                  <div className="mb-3">
+                    <input
+                      type="range"
+                      min="-10"
+                      max="10"
+                      step="0.1"
+                      value={subtitleTiming.offset}
+                      onChange={(e) => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: parseFloat(e.target.value),
+                        enabled: true
+                      })}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                      disabled={!subtitleTiming.enabled}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-gray-400 mb-3">
+                    <span>提前 10秒</span>
+                    <span>同步</span>
+                    <span>延後 10秒</span>
+                  </div>
+                  
+                  {/* 快速調整按鈕 */}
+                  <div className="grid grid-cols-5 gap-2">
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: Math.max(-10, subtitleTiming.offset - 1),
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      -1s
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: Math.max(-10, subtitleTiming.offset - 0.5),
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      -0.5s
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: 0,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      重設
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: Math.min(10, subtitleTiming.offset + 0.5),
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      +0.5s
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        offset: Math.min(10, subtitleTiming.offset + 1),
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      +1s
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 播放速度控制 */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-white text-sm font-medium">播放速度</label>
+                    <span className="text-green-400 text-sm font-mono">
+                      {subtitleTiming.speedRate === 1 ? '正常' : `${subtitleTiming.speedRate.toFixed(2)}x`}
+                    </span>
+                  </div>
+                  
+                  {/* 速度滑桿 */}
+                  <div className="mb-3">
+                    <input
+                      type="range"
+                      min="0.8"
+                      max="1.2"
+                      step="0.01"
+                      value={subtitleTiming.speedRate}
+                      onChange={(e) => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: parseFloat(e.target.value),
+                        enabled: true
+                      })}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                      disabled={!subtitleTiming.enabled}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-gray-400 mb-3">
+                    <span>0.8x (慢)</span>
+                    <span>1.0x</span>
+                    <span>1.2x (快)</span>
+                  </div>
+                  
+                  {/* 快速選擇按鈕 */}
+                  <div className="grid grid-cols-5 gap-2">
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: 0.9,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      0.9x
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: 0.95,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      0.95x
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: 1.0,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      1.0x
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: 1.05,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      1.05x
+                    </Button>
+                    <Button
+                      onClick={() => handleSubtitleTimingChange({
+                        ...subtitleTiming,
+                        speedRate: 1.1,
+                        enabled: true
+                      })}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8"
+                      disabled={!subtitleTiming.enabled}
+                    >
+                      1.1x
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 說明和重設 */}
+              <div className="mt-4 pt-4 border-t border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-gray-400">
+                    💡 快捷鍵: Shift + ←→ 調偏移, Shift + ↑↓ 調速度, Shift + 0 重設
+                  </div>
+                  <Button
+                    onClick={() => handleSubtitleTimingChange({
+                      offset: 0,
+                      speedRate: 1.0,
+                      enabled: false
+                    })}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    disabled={!subtitleTiming.enabled || (subtitleTiming.offset === 0 && subtitleTiming.speedRate === 1)}
+                  >
+                    <i className="fas fa-undo mr-1"></i>
+                    重設全部
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* 字幕控制面板 */}
         <div className="bg-black bg-opacity-90 p-4">
@@ -492,6 +848,18 @@ export default function VideoPlayer({ videoId }: VideoPlayerProps) {
               >
                 <i className="fas fa-palette mr-1"></i>
                 字幕樣式
+              </Button>
+
+              {/* 字幕微調按鈕 */}
+              <Button
+                variant={subtitleTiming.enabled && (subtitleTiming.offset !== 0 || subtitleTiming.speedRate !== 1) ? "secondary" : "ghost"}
+                size="sm"
+                className="text-white hover:text-gray-300"
+                onClick={() => setShowTimingPanel(!showTimingPanel)}
+                data-testid="button-subtitle-timing"
+              >
+                <i className="fas fa-clock mr-1"></i>
+                字幕微調
               </Button>
 
               {/* 調試資訊開關 */}
