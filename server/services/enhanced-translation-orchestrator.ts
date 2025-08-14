@@ -453,7 +453,7 @@ export class EnhancedTranslationOrchestrator {
     try {
       // 使用現有的LLMService進行翻譯
       const { LLMService } = await import('./llm-service');
-      const llmService = new LLMService(this.llmConfig);
+      const llmService = new LLMService();
 
       // 將關鍵字作為上下文傳遞給翻譯服務
       const translatedSubtitles = await llmService.translateSubtitles(
@@ -572,7 +572,7 @@ export class EnhancedTranslationOrchestrator {
     // 使用現有的語義縫合邏輯
     try {
       const { LLMService } = await import('./llm-service');
-      const llmService = new LLMService(this.llmConfig);
+      const llmService = new LLMService();
 
       const optimizedSubtitles = await llmService.optimizeSubtitleTiming(
         subtitles,

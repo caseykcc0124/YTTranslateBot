@@ -259,7 +259,7 @@ export default function RecentTranslations({ onVideoSelect }: RecentTranslations
     return (
       <Card className="rounded-2xl shadow-lg">
         <CardContent className="p-8">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">最近的翻譯</h3>
+          <h3 className="text-2xl font-bold text-gray-900 mb-6">翻譯清單</h3>
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse">
@@ -291,7 +291,7 @@ export default function RecentTranslations({ onVideoSelect }: RecentTranslations
       <CardContent className="p-8">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-gray-900" data-testid="recent-translations-title">
-            最近的翻譯
+            翻譯清單
           </h3>
           <div className="flex items-center space-x-3">
             <Badge variant={isManagementMode ? "default" : "secondary"} className="text-xs">
@@ -305,6 +305,13 @@ export default function RecentTranslations({ onVideoSelect }: RecentTranslations
             >
               <span className="mr-2">{isManagementMode ? '👁️' : '⚙️'}</span>
               {isManagementMode ? '瀏覽模式' : '管理模式'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/videos"] })}
+            >
+              🔄 刷新
             </Button>
           </div>
         </div>

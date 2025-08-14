@@ -353,7 +353,7 @@ export function createChatAIClient(config: ChatAIClientConfig): ChatAIClient {
  * Example usage:
  * 
  * const client = createChatAIClient({
- *   apiKey: "sk-NXEfbTnSFxmsDljpeSDTmb3yFN9wyeX7WU7NOs8hzfYYjogp",
+ *   apiKey: "your-api-key-here",
  *   baseURL: "https://www.chataiapi.com"
  * });
  * 

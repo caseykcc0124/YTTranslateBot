@@ -220,7 +220,7 @@ export class PostTranslationStyleAdjuster {
 
     // 動態導入LLMService
     const { LLMService } = await import('./llm-service');
-    const llmService = new LLMService(this.llmConfig);
+    const llmService = new LLMService();
 
     const prompt = this.buildStyleAdjustmentPrompt(segment, keywords, config);
 

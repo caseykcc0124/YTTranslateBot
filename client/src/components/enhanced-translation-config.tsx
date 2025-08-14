@@ -5,7 +5,6 @@
  */
 
 import { useState } from "react";
-import * as React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
-} from "@/components/ui/collapsible";
-import { ChevronDown, Plus, X, Sparkles, Settings, HelpCircle } from "lucide-react";
+import { Sparkles, Settings, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface EnhancedTranslationConfig {
@@ -161,28 +155,6 @@ export default function EnhancedTranslationConfigModal({
 
           {/* 風格配置 */}
           <TabsContent value="style" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">關鍵字提取功能說明</CardTitle>
-                <CardDescription>
-                  關鍵字提取功能已移至「基礎翻譯設定」，您可以在主頁面進行配置
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start space-x-2">
-                    <i className="fas fa-info-circle text-blue-600 mt-0.5"></i>
-                    <div className="text-sm text-blue-800">
-                      <div className="font-medium mb-1">關鍵字功能位置變更：</div>
-                      <div>• 關鍵字提取功能現在位於主頁面的「基礎翻譯設定」中</div>
-                      <div>• 作為獨立開關，不再依賴增強翻譯是否啟用</div>
-                      <div>• 支持添加最多15個自訂關鍵字</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">翻譯風格</CardTitle>

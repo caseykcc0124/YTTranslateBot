@@ -501,19 +501,7 @@ export class BackgroundTranslationService {
       });
 
       // 獲取 LLM 配置用於轉錄
-      const llmConfig = await storage.getLLMConfiguration();
-      const apiKey = llmConfig?.apiKey;
-      
-      if (!apiKey) {
-        throw new Error('No API key available for transcription');
-      }
-
-      const llmService = new LLMService({
-        provider: llmConfig?.provider as any || "chatai",
-        apiKey,
-        apiEndpoint: llmConfig?.apiEndpoint || undefined,
-        model: llmConfig?.model || "whisper-1"
-      });
+      const llmService = new LLMService();
 
       const video = await storage.getVideo((await storage.getTranslationTask(taskId))?.videoId || '');
       subtitleEntries = await llmService.transcribeAudio(audioBuffer, video?.title || '');
@@ -593,11 +581,6 @@ export class BackgroundTranslationService {
 
     // 獲取 LLM 配置
     const llmConfig = await storage.getLLMConfiguration();
-    const apiKey = llmConfig?.apiKey;
-    
-    if (!apiKey) {
-      throw new Error('No API key configured for translation');
-    }
 
     // 創建翻譯配置，優先使用基礎配置，回退到LLM配置
     const translationConfig: TranslationConfig = {
@@ -838,12 +821,7 @@ export class BackgroundTranslationService {
     }
 
     // 進行智能分段
-    const llmService = new LLMService({
-      provider: llmConfig?.provider as any || "chatai",
-      apiKey,
-      apiEndpoint: llmConfig?.apiEndpoint || undefined,
-      model: llmConfig?.model || "gemini-2.5-flash"
-    });
+    const llmService = new LLMService();
 
     // 檢查是否已有分段任務
     let segmentTasks = await storage.getSegmentTasksByTranslationId(taskId);
@@ -1664,19 +1642,7 @@ export class BackgroundTranslationService {
 
       // 獲取LLM配置來創建預處理器
       const llmConfig = await storage.getLLMConfiguration();
-      const apiKey = llmConfig?.apiKey;
-
-      if (!apiKey) {
-        console.warn("⚠️ 沒有可用的API密鑰，跳過ASR預處理");
-        return subtitleEntries;
-      }
-
-      const llmService = new LLMService({
-        provider: llmConfig?.provider as any || "chatai",
-        apiKey,
-        apiEndpoint: llmConfig?.apiEndpoint || undefined,
-        model: llmConfig?.model || "gemini-2.5-flash"
-      });
+      const llmService = new LLMService();
 
       // 創建ASR預處理器
       const preprocessor = new ASRSubtitlePreprocessor(llmService, {

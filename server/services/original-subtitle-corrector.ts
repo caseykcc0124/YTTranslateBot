@@ -207,7 +207,7 @@ export class OriginalSubtitleCorrector {
   ): Promise<EnhancedSubtitleEntry[]> {
     // 動態導入LLMService以避免循環依賴
     const { LLMService } = await import('./llm-service');
-    const llmService = new LLMService(this.llmConfig);
+    const llmService = new LLMService();
 
     const prompt = this.buildCorrectionPrompt(segment, keywords, config);
     

@@ -8,8 +8,12 @@ export class OpenAIService {
   private openai: OpenAI;
 
   constructor(apiKey?: string, apiEndpoint?: string) {
+    if (!apiKey) {
+      throw new Error('OpenAI API 密鑰是必需的。請在 LLM 配置中設置 API 密鑰。');
+    }
+    
     this.openai = new OpenAI({
-      apiKey: apiKey || process.env.OPENAI_API_KEY,
+      apiKey: apiKey,
       baseURL: apiEndpoint,
     });
   }

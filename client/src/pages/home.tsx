@@ -50,7 +50,7 @@ export default function Home() {
             </div>
             <nav className="hidden md:flex space-x-8">
               <a href="/" className="text-gray-700 hover:text-gray-900 font-medium" data-testid="nav-home">首頁</a>
-              <a href="/management" className="text-gray-700 hover:text-gray-900 font-medium" data-testid="nav-management">任務管理</a>
+              <a href="/management" className="text-gray-700 hover:text-gray-900 font-medium" data-testid="nav-management">翻譯清單</a>
               <a href="/cache" className="text-gray-700 hover:text-gray-900 font-medium" data-testid="nav-cache">快取管理</a>
               <a href="/settings" className="text-gray-700 hover:text-gray-900 font-medium" data-testid="nav-system-settings">系統設定</a>
               <button 

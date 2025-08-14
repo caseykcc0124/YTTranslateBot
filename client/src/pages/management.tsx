@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import TranslationManager from "@/components/translation-manager";
+import RecentTranslations from "@/components/recent-translations";
 
 export default function Management() {
   return (
@@ -23,7 +23,7 @@ export default function Management() {
                 <a className="text-gray-700 hover:text-gray-900 font-medium">首頁</a>
               </Link>
               <Link href="/management">
-                <a className="text-blue-600 hover:text-blue-800 font-medium">任務管理</a>
+                <a className="text-blue-600 hover:text-blue-800 font-medium">翻譯清單</a>
               </Link>
               <Link href="/cache">
                 <a className="text-gray-700 hover:text-gray-900 font-medium">快取管理</a>
@@ -38,7 +38,10 @@ export default function Management() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <TranslationManager />
+        <RecentTranslations onVideoSelect={(videoId) => {
+          // Navigate to home page with selected video
+          window.location.href = `/?video=${videoId}`;
+        }} />
       </main>
     </div>
   );

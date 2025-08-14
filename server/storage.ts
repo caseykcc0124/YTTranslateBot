@@ -472,8 +472,6 @@ import { SQLiteStorage } from "./sqlite-storage";
 console.log("🏗️ 初始化儲存系統...");
 console.log("📁 USE_FILE_STORAGE:", process.env.USE_FILE_STORAGE);
 console.log("🗃️ USE_SQLITE_STORAGE:", process.env.USE_SQLITE_STORAGE);
-console.log("🔑 OPENAI_API_KEY 是否存在:", !!process.env.OPENAI_API_KEY);
-console.log("📏 OPENAI_API_KEY 長度:", process.env.OPENAI_API_KEY?.length || 0);
 
 // 儲存優先級：SQLite (預設) > FileStorage > MemStorage
 let storage: IStorage;

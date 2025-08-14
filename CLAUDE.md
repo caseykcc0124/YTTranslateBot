@@ -92,10 +92,14 @@ shared/           # Shared types and schemas
 
 ## Development Notes
 
-### Environment Variables Required
-- `OPENAI_API_KEY` - LLM API key (fallback if not configured in UI)
+### Environment Variables
 - `PORT` - Server port (default: 3000)
 - `NODE_ENV` - Environment (development/production)
+- `USE_FILE_STORAGE` - Use file storage instead of SQLite (set to 'true')
+- `USE_SQLITE_STORAGE` - Use SQLite storage (default: true, set to 'false' for memory storage)
+- `DEBUG_POLLING` - Enable debug logging for polling endpoints
+
+**Note**: API keys are now stored in the database and configured through the web interface. Environment variable API keys are no longer supported.
 
 ### LLM Provider Support
 - **ChatAI (Default)**: External LLM API with structured JSON output, auto-dialect detection

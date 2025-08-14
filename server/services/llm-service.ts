@@ -2,14 +2,17 @@ import { SubtitleEntry } from '@shared/schema';
 import { OpenAIService } from './openai';
 import { ChatAIClient, createChatAIClient } from './chatai_client';
 import { SmartSubtitleSegmentation, SubtitleSegment, SegmentationConfig, SegmentBoundaryAnalysis } from './subtitle-segmentation';
+import { storage } from '../storage';
 
 export type LLMProvider = 'chatai' | 'openai';
 
 export interface LLMServiceConfig {
-  provider: LLMProvider;
-  apiKey: string;
+  provider?: LLMProvider;
   apiEndpoint?: string;
   model?: string;
+  userId?: string; // 用於多用戶支持
+  // 用於測試目的的臨時配置
+  apiKey?: string; // 如果提供，將跳過數據庫查詢
 }
 
 export interface ILLMService {
@@ -38,12 +41,14 @@ export class LLMService implements ILLMService {
   private chataiClient?: ChatAIClient;
   private model: string;
   private segmentation: SmartSubtitleSegmentation;
+  private userId?: string;
+  private config: LLMServiceConfig;
 
-  constructor(config: LLMServiceConfig) {
-    this.provider = config.provider;
-    this.model = config.model || (config.provider === 'chatai' ? 'gemini-2.5-flash' : 'gpt-4o');
+  constructor(config: LLMServiceConfig = {}) {
+    this.config = config;
+    this.userId = config.userId;
     
-    // 初始化智慧分割服務 - 使用更小分段確保 JSON 格式穩定
+    // 先設置 segmentation，provider 將在 initializeServices 中設置
     this.segmentation = new SmartSubtitleSegmentation({
       maxSegmentSize: 30,       // 大幅降低到30個字幕條目
       targetSegmentSize: 20,    // 目標20個字幕條目  
@@ -58,25 +63,91 @@ export class LLMService implements ILLMService {
       }
     });
 
-    switch (config.provider) {
-      case 'chatai':
-        this.chataiClient = createChatAIClient({
-          apiKey: config.apiKey,
-          baseURL: config.apiEndpoint || 'https://www.chataiapi.com',
-          timeout: 300000 // 5 minutes for long operations (增加到5分鐘)
-        });
-        break;
-      
-      case 'openai':
-        this.openaiService = new OpenAIService(config.apiKey, config.apiEndpoint);
-        break;
-      
-      default:
-        throw new Error(`Unsupported LLM provider: ${config.provider}`);
+    // 初始化將是異步的，但我們需要保持構造函數同步
+    // 所以我們將在每個方法調用時確保服務已初始化
+    this.provider = config.provider || 'chatai';
+    this.model = config.model || (this.provider === 'chatai' ? 'gemini-2.5-flash' : 'gpt-4o');
+  }
+
+  /**
+   * 確保服務已正確初始化
+   * 這個方法將從數據庫獲取 API 密鑰並初始化相應的服務，或使用提供的配置
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (this.chataiClient || this.openaiService) {
+      return; // 已經初始化
+    }
+
+    try {
+      let apiKey: string;
+      let provider: LLMProvider;
+      let apiEndpoint: string | undefined;
+      let model: string;
+
+      // 如果配置中提供了 API 密鑰，使用它（通常用於測試）
+      if (this.config.apiKey) {
+        console.log('🔐 使用提供的 API 密鑰初始化 LLM 服務 (測試模式)');
+        apiKey = this.config.apiKey;
+        provider = this.config.provider || 'chatai';
+        apiEndpoint = this.config.apiEndpoint;
+        model = this.config.model || (provider === 'chatai' ? 'gemini-2.5-flash' : 'gpt-4o');
+      } else {
+        // 從數據庫獲取配置
+        const llmConfig = await storage.getLLMConfiguration(this.userId);
+        
+        if (!llmConfig) {
+          throw new Error('未找到 LLM 配置。請先在設置中配置 LLM 服務。');
+        }
+
+        if (!llmConfig.apiKey) {
+          throw new Error('API 密鑰未配置。請在設置中提供有效的 API 密鑰。');
+        }
+
+        console.log('🔐 從數據庫初始化 LLM 服務');
+        apiKey = llmConfig.apiKey;
+        provider = (llmConfig.provider as LLMProvider) || 'chatai';
+        apiEndpoint = llmConfig.apiEndpoint;
+        model = llmConfig.model || (provider === 'chatai' ? 'gemini-2.5-flash' : 'gpt-4o');
+      }
+
+      // 使用獲取的配置
+      this.provider = provider;
+      this.model = model;
+
+      console.log('🔐 LLM 服務初始化參數:', {
+        provider: this.provider,
+        model: this.model,
+        hasApiKey: !!apiKey,
+        apiKeyLength: apiKey.length,
+        source: this.config.apiKey ? 'provided' : 'database'
+      });
+
+      switch (this.provider) {
+        case 'chatai':
+          this.chataiClient = createChatAIClient({
+            apiKey,
+            baseURL: apiEndpoint || 'https://www.chataiapi.com',
+            timeout: 300000 // 5 minutes for long operations
+          });
+          break;
+        
+        case 'openai':
+          this.openaiService = new OpenAIService(apiKey, apiEndpoint);
+          break;
+        
+        default:
+          throw new Error(`不支持的 LLM 提供商: ${this.provider}`);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知錯誤';
+      console.error('❌ LLM 服務初始化失敗:', errorMessage);
+      throw new Error(`LLM 服務初始化失敗: ${errorMessage}`);
     }
   }
 
   async testConnection(model?: string): Promise<boolean> {
+    await this.ensureInitialized();
+    
     const testModel = model || this.model;
     
     console.log("🔌 開始測試 LLM 連線...");
@@ -617,6 +688,8 @@ ${response}
   }
 
   async getAvailableModels(): Promise<string[]> {
+    await this.ensureInitialized();
+    
     try {
       if (this.provider === 'chatai' && this.chataiClient) {
         console.log("🔍 獲取 ChatAI 模型列表...");
@@ -679,6 +752,8 @@ ${response}
   }
 
   async transcribeAudio(audioBuffer: Buffer, videoTitle: string): Promise<SubtitleEntry[]> {
+    await this.ensureInitialized();
+    
     if (this.provider === 'chatai' && this.chataiClient) {
       // ChatAI supports transcription models like gpt-4o-mini-transcribe
       // For now, we'll use the existing OpenAI Whisper API approach
@@ -723,6 +798,8 @@ ${response}
     naturalTone: boolean = true,
     keywords: string[] = []
   ): Promise<SubtitleEntry[]> {
+    await this.ensureInitialized();
+    
     const useModel = model || this.model;
 
     // 檢查是否需要分段處理
@@ -1795,6 +1872,8 @@ ${JSON.stringify(subtitles, null, 2)}
     videoTitle: string,
     model?: string
   ): Promise<SubtitleEntry[]> {
+    await this.ensureInitialized();
+    
     const useModel = model || this.model;
 
     // 檢查是否需要分段處理時間軸優化
@@ -2513,6 +2592,8 @@ ${JSON.stringify(subtitles, null, 2)}`;
     model?: string, 
     temperature: number = 0.3
   ): Promise<string> {
+    await this.ensureInitialized();
+    
     const useModel = model || this.model;
     
     try {

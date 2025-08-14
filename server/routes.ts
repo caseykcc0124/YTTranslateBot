@@ -559,15 +559,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           provider: "chatai", // Changed default to chatai
           apiEndpoint: "https://www.chataiapi.com",
           model: "gemini-2.5-flash",
-          taiwanOptimization: true,
-          naturalTone: true,
-          subtitleTiming: true,
+          hasApiKey: false,
         });
       }
       
-      // 不在回應中發送 API 金鑰
-      const { apiKey, ...safeConfig } = config;
-      res.json(safeConfig);
+      // 只返回 LLM 服務相關的配置，不包含翻譯設定（GET）
+      const { apiKey, taiwanOptimization, naturalTone, subtitleTiming, ...llmConfig } = config;
+      res.json({
+        ...llmConfig,
+        hasApiKey: !!apiKey && apiKey.length > 0
+      });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : "未知錯誤" });
     }
@@ -578,9 +579,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const configData = insertLLMConfigurationSchema.parse(req.body);
       const config = await storage.createOrUpdateLLMConfiguration(configData);
       
-      // 不在回應中發送 API 金鑰
-      const { apiKey, ...safeConfig } = config;
-      res.json(safeConfig);
+      // 只返回 LLM 服務相關的配置，不包含翻譯設定（POST）
+      const { apiKey, taiwanOptimization, naturalTone, subtitleTiming, ...llmConfig } = config;
+      res.json({
+        ...llmConfig,
+        hasApiKey: !!apiKey && apiKey.length > 0
+      });
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "未知錯誤" });
     }
@@ -591,41 +595,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`🔌 [${requestId}] API: 測試 LLM 連線請求`);
     
     try {
-      const { provider, apiKey, apiEndpoint, model } = req.body;
+      const { model } = req.body;
       
-      console.log(`📋 [${requestId}] 請求參數:`, {
-        provider: provider || "chatai",
-        hasApiKey: !!apiKey,
-        apiKeyLength: apiKey?.length || 0,
-        apiKeyPrefix: apiKey ? `${apiKey.substring(0, 8)}...` : 'none',
-        apiEndpoint,
-        model: model || "gpt-4o",
+      // 從數據庫獲取配置，不再需要從請求中獲取 API 密鑰
+      const dbConfig = await storage.getLLMConfiguration();
+      if (!dbConfig || !dbConfig.apiKey) {
+        console.warn(`⚠️ [${requestId}] 資料庫中未找到 LLM 配置或 API 密鑰`);
+        return res.status(400).json({ error: "請先在設置中配置 LLM 服務和 API 密鑰" });
+      }
+      
+      console.log(`📋 [${requestId}] 使用資料庫配置:`, {
+        provider: dbConfig.provider,
+        hasApiKey: !!dbConfig.apiKey,
+        apiKeyLength: dbConfig.apiKey?.length || 0,
+        apiKeyPrefix: dbConfig.apiKey ? `${dbConfig.apiKey.substring(0, 8)}...` : 'none',
+        apiEndpoint: dbConfig.apiEndpoint,
+        model: model || dbConfig.model,
         clientIP: req.ip,
         userAgent: req.get('User-Agent')?.substring(0, 50) + "...",
         timestamp: new Date().toISOString()
       });
-      
-      if (!apiKey) {
-        console.warn(`⚠️ [${requestId}] 缺少 API 金鑰`);
-        return res.status(400).json({ error: "API key is required" });
-      }
 
-      const llmService = new LLMService({
-        provider: provider || "chatai",
-        apiKey,
-        apiEndpoint,
-        model
-      });
+      // 使用新的資料庫驅動方法創建 LLMService
+      const llmService = new LLMService();
       
       console.log(`🌐 [${requestId}] 開始連線測試...`);
       const startTime = Date.now();
       
-      await llmService.testConnection(model || "gemini-2.5-flash");
+      await llmService.testConnection(model || dbConfig.model);
       
       const duration = Date.now() - startTime;
       console.log(`✅ [${requestId}] 連線測試成功`, {
         duration: `${duration}ms`,
-        provider: provider || "chatai"
+        provider: dbConfig.provider
       });
       
       res.json({ success: true });
@@ -645,30 +647,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(`🎯 [${requestId}] API: 獲取 LLM 模型列表請求`);
     
     try {
-      const { provider, apiKey, apiEndpoint } = req.query;
-      
-      console.log(`📋 [${requestId}] 請求參數:`, {
-        provider: (provider as string) || "chatai",
-        hasApiKey: !!apiKey,
-        apiKeyLength: (apiKey as string)?.length || 0,
-        apiKeyPrefix: apiKey ? `${(apiKey as string).substring(0, 8)}...` : 'none',
-        apiEndpoint: apiEndpoint as string,
-        clientIP: req.ip,
-        timestamp: new Date().toISOString()
-      });
-      
-      if (!apiKey) {
-        console.log(`⚠️ [${requestId}] 沒有提供 API 金鑰，返回空列表`);
+      // 從數據庫獲取配置，不再需要從請求中獲取 API 密鑰
+      const dbConfig = await storage.getLLMConfiguration();
+      if (!dbConfig || !dbConfig.apiKey) {
+        console.log(`⚠️ [${requestId}] 資料庫中未找到 LLM 配置或 API 密鑰，返回預設模型列表`);
         return res.json({ 
-          models: [], 
-          warning: "請先輸入 API 金鑰以獲取可用模型列表",
+          models: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
+          warning: "請先在設置中配置 LLM 服務和 API 密鑰以獲取完整模型列表",
           fallbackUsed: true
         });
       }
+      
+      console.log(`📋 [${requestId}] 使用資料庫配置:`, {
+        provider: dbConfig.provider,
+        hasApiKey: !!dbConfig.apiKey,
+        apiKeyLength: dbConfig.apiKey?.length || 0,
+        apiKeyPrefix: dbConfig.apiKey ? `${dbConfig.apiKey.substring(0, 8)}...` : 'none',
+        apiEndpoint: dbConfig.apiEndpoint,
+        clientIP: req.ip,
+        timestamp: new Date().toISOString()
+      });
 
       // 檢查 API Key 格式
-      const apiKeyStr = apiKey as string;
-      if (apiKeyStr.length < 10 || apiKeyStr.startsWith('sk-test')) {
+      if (dbConfig.apiKey.length < 10 || dbConfig.apiKey.startsWith('sk-test')) {
         console.log(`⚠️ [${requestId}] 檢測到測試 API 金鑰，返回預設模型列表`);
         return res.json({ 
           models: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.0-pro'],
@@ -677,12 +678,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const llmService = new LLMService({
-        provider: (provider === "openai" ? "openai" : "chatai"),
-        apiKey: apiKeyStr,
-        apiEndpoint: apiEndpoint as string,
-        model: "gemini-2.5-flash" // Default model for initialization
-      });
+      // 使用新的資料庫驅動方法創建 LLMService
+      const llmService = new LLMService();
       
       console.log(`🌐 [${requestId}] 開始獲取模型列表...`);
       const startTime = Date.now();
