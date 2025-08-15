@@ -101,6 +101,30 @@ shared/           # Shared types and schemas
 
 **Note**: API keys are now stored in the database and configured through the web interface. Environment variable API keys are no longer supported.
 
+### Troubleshooting
+
+#### Subtitle Extraction Issues
+If the system reports "no subtitles" but the video actually has subtitles:
+
+**Common Issues**:
+- yt-dlp permission error (`spawn ./yt-dlp EACCES`)
+- @distube/ytdl-core returns empty results
+- YouTube API access failures
+
+**Solutions**:
+1. **Fix yt-dlp permissions**: `chmod +x ./yt-dlp`
+2. **Enhanced error handling**: The system now tries multiple subtitle formats (VTT, SRV3, TTML)
+3. **Improved logging**: Development mode shows detailed subtitle extraction logs
+4. **User-Agent headers**: Added proper browser headers for better API compatibility
+
+**Recent Fixes** (2025-08-14):
+- ✅ Added YouTube Transcript API as the primary subtitle extraction method
+- ✅ Fixed yt-dlp executable permissions 
+- ✅ Enhanced subtitle extraction with multiple format support
+- ✅ Improved error handling and debugging information
+- ✅ Added retry logic for different subtitle formats
+- ✅ Implemented fallback hierarchy: YouTube Transcript API → yt-dlp → @distube/ytdl-core → ytdl-core
+
 ### LLM Provider Support
 - **ChatAI (Default)**: External LLM API with structured JSON output, auto-dialect detection
 - **OpenAI**: Official OpenAI API with Whisper transcription support

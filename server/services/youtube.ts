@@ -1,6 +1,7 @@
 import ytdl from 'ytdl-core';
 // 嘗試使用更穩定的替代方案
 import ytdlDistube from '@distube/ytdl-core';
+import { YoutubeTranscript } from 'youtube-transcript';
 import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { type InsertVideo } from '@shared/schema';
@@ -131,8 +132,9 @@ export class YouTubeService {
   static async getVideoSubtitles(url: string): Promise<string | null> {
     printYouTubeSeparator("字幕獲取流程", url);
     
-    // 嘗試多種方法獲取字幕，先使用 yt-dlp，再回到原始方法
+    // 優先使用 YouTube Transcript API，這是最可靠的方法
     const methods = [
+      { name: "YouTube Transcript API", func: async () => await this.getSubtitlesWithTranscriptAPI(url) },
       { name: "yt-dlp (Python)", func: async () => await this.getSubtitlesWithYtDlp(url) },
       { name: "@distube/ytdl-core", func: async () => await this.getSubtitlesWithDistube(url) },
       { name: "ytdl-core", func: async () => await this.getSubtitlesWithYtdl(url) }
@@ -143,7 +145,9 @@ export class YouTubeService {
         console.log(`🔄 嘗試使用 ${method.name} 獲取字幕...`);
         const result = await method.func();
         if (result) {
-          const formatType = result.includes('<transcript>') ? 'XML' : (result.includes('WEBVTT') ? 'VTT' : '未知');
+          const formatType = result.includes('<transcript>') ? 'XML' : 
+                           result.includes('WEBVTT') ? 'VTT' : 
+                           result.includes('[{') ? 'JSON' : '未知';
           printYouTubeCompletion(`字幕獲取 (${method.name})`, true, `長度: ${result.length}, 格式: ${formatType}`);
           return result;
         } else {
@@ -159,6 +163,94 @@ export class YouTubeService {
 
     printYouTubeCompletion("字幕獲取", false, "所有方法都失敗");
     return null;
+  }
+
+  private static async getSubtitlesWithTranscriptAPI(url: string): Promise<string | null> {
+    const videoId = this.extractVideoId(url);
+    if (!videoId) {
+      throw new Error('無法提取影片ID');
+    }
+
+    console.log(`🎯 使用 YouTube Transcript API 獲取字幕: ${videoId}`);
+    
+    try {
+      // Try different language options and configurations
+      const transcriptOptions = [
+        { lang: 'en' },
+        { lang: 'en-US' },
+        { country: 'US' },
+        { lang: 'en', country: 'US' },
+        {} // default options
+      ];
+      
+      for (const options of transcriptOptions) {
+        try {
+          console.log(`🔄 嘗試 YouTube Transcript API 選項:`, options);
+          const transcript = await YoutubeTranscript.fetchTranscript(videoId, options);
+          
+          if (transcript && transcript.length > 0) {
+            console.log(`📝 YouTube Transcript API: 找到 ${transcript.length} 個字幕條目`, options);
+            
+            // 將 transcript 格式轉換為 VTT 格式以便後續處理
+            let vttContent = 'WEBVTT\n\n';
+            
+            transcript.forEach((item, index) => {
+              const startTime = this.formatTime(parseFloat(item.offset) / 1000);
+              const endTime = this.formatTime((parseFloat(item.offset) + parseFloat(item.duration)) / 1000);
+              
+              vttContent += `${index + 1}\n`;
+              vttContent += `${startTime} --> ${endTime}\n`;
+              vttContent += `${item.text}\n\n`;
+            });
+
+            console.log(`✅ YouTube Transcript API: 成功轉換為 VTT 格式`, {
+              originalEntries: transcript.length,
+              vttLength: vttContent.length,
+              preview: transcript[0] ? `${transcript[0].text.substring(0, 50)}...` : 'N/A',
+              usedOptions: options
+            });
+
+            return vttContent;
+          } else {
+            console.log(`⚪ YouTube Transcript API: 該選項返回 ${transcript?.length || 0} 個條目`, options);
+          }
+        } catch (optionError) {
+          console.log(`⚠️ YouTube Transcript API 選項失敗:`, options, optionError instanceof Error ? optionError.message : optionError);
+        }
+      }
+      
+      console.log('⚠️ YouTube Transcript API: 所有選項都沒有找到字幕');
+      return null;
+      
+    } catch (error) {
+      if (error instanceof Error) {
+        // 檢查是否是沒有字幕的錯誤
+        if (error.message.includes('Could not retrieve a transcript') || 
+            error.message.includes('No transcripts found') ||
+            error.message.includes('Transcript is disabled')) {
+          console.log('⚠️ YouTube Transcript API: 該影片沒有字幕或字幕被禁用');
+          return null;
+        }
+        
+        console.error('❌ YouTube Transcript API 錯誤:', error.message);
+        throw error;
+      }
+      throw new Error('YouTube Transcript API 未知錯誤');
+    }
+  }
+
+  private static formatTime(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    const milliseconds = Math.floor((seconds % 1) * 1000);
+
+    const h = hours.toString().padStart(2, '0');
+    const m = minutes.toString().padStart(2, '0');
+    const s = secs.toString().padStart(2, '0');
+    const ms = milliseconds.toString().padStart(3, '0');
+
+    return `${h}:${m}:${s}.${ms}`;
   }
 
   private static async getSubtitlesWithYtDlp(url: string): Promise<string | null> {
@@ -273,36 +365,125 @@ export class YouTubeService {
     const captionTracks = info.player_response?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
     
     if (!captionTracks || captionTracks.length === 0) {
+      console.log('⚠️ @distube/ytdl-core: 未找到字幕軌道');
       return null;
     }
+
+    console.log(`🔍 @distube/ytdl-core: 找到 ${captionTracks.length} 個字幕軌道:`, 
+      captionTracks.map(t => `${t.languageCode} (${t.name?.simpleText || 'unknown'})`).join(', ')
+    );
 
     // Find English or first available subtitle track
     const track = captionTracks.find(t => t.languageCode === 'en') || captionTracks[0];
     if (!track || !track.baseUrl) {
+      console.log('⚠️ @distube/ytdl-core: 未找到可用的字幕軌道或基礎URL');
       return null;
     }
 
-    // 優先獲取 VTT 格式以避免 rolling captions 重複問題
-    const subtitleUrl = track.baseUrl.includes('?') 
-      ? `${track.baseUrl}&fmt=vtt`
-      : `${track.baseUrl}?fmt=vtt`;
+    // Try multiple format options
+    const formatOptions = ['vtt', 'srv3', 'ttml'];
     
-    console.log('📥 獲取字幕:', { 
-      languageCode: track.languageCode,
-      format: 'VTT (clean)',
-      url: subtitleUrl.substring(0, 100) + '...'
-    });
+    for (const fmt of formatOptions) {
+      try {
+        // Build the subtitle URL with proper parameters
+        let subtitleUrl = track.baseUrl;
+        
+        // Ensure we have the format parameter
+        if (subtitleUrl.includes('?')) {
+          subtitleUrl += `&fmt=${fmt}`;
+        } else {
+          subtitleUrl += `?fmt=${fmt}`;
+        }
+        
+        // Add additional parameters that might be needed
+        if (!subtitleUrl.includes('&lang=')) {
+          subtitleUrl += `&lang=${track.languageCode}`;
+        }
+        
+        console.log(`📥 嘗試獲取字幕 (${fmt} 格式):`, { 
+          languageCode: track.languageCode,
+          format: fmt.toUpperCase(),
+          url: subtitleUrl.substring(0, 120) + '...'
+        });
 
-    const response = await fetch(subtitleUrl);
-    const content = await response.text();
-    
-    // 檢查是否為 XML timedText 格式
-    if (content.includes('<transcript>')) {
-      console.log('📋 檢測到 timedText XML 格式，需要特殊解析');
-      return content; // 將在 SubtitleService 中處理
+        const response = await fetch(subtitleUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/vtt, application/x-subrip, text/xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        if (!response.ok) {
+          console.log(`⚠️ HTTP ${response.status}: ${response.statusText} (${fmt} 格式)`);
+          console.log(`🔍 Response headers:`, Object.fromEntries(response.headers.entries()));
+          continue;
+        }
+        
+        const content = await response.text();
+        
+        if (!content || content.length < 10) {
+          console.log(`⚠️ 空內容或內容過短 (${fmt} 格式):`, {
+            length: content.length,
+            preview: content.substring(0, 50),
+            contentType: response.headers.get('content-type')
+          });
+          continue;
+        }
+        
+        console.log(`✅ 成功獲取字幕 (${fmt} 格式):`, {
+          length: content.length,
+          preview: content.substring(0, 100).replace(/\n/g, '\\n'),
+          contentType: response.headers.get('content-type')
+        });
+        
+        // 檢查是否為 XML timedText 格式
+        if (content.includes('<transcript>') || content.includes('<timedtext>')) {
+          console.log('📋 檢測到 timedText XML 格式，需要特殊解析');
+          return content; // 將在 SubtitleService 中處理
+        }
+        
+        return content;
+        
+      } catch (error) {
+        console.log(`❌ ${fmt} 格式獲取失敗:`, {
+          error: error instanceof Error ? error.message : error,
+          url: subtitleUrl?.substring(0, 100) + '...'
+        });
+        continue;
+      }
     }
     
-    return content;
+    console.log('❌ @distube/ytdl-core: 所有格式都失敗');
+    
+    // 如果所有格式都失敗，嘗試直接使用原始 URL
+    console.log('🔄 嘗試使用原始字幕 URL...');
+    try {
+      const response = await fetch(track.baseUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 10000
+      });
+      
+      if (response.ok) {
+        const content = await response.text();
+        if (content && content.length > 10) {
+          console.log(`✅ 原始 URL 成功:`, {
+            length: content.length,
+            contentType: response.headers.get('content-type')
+          });
+          return content;
+        }
+      }
+    } catch (error) {
+      console.log('❌ 原始 URL 也失敗:', error instanceof Error ? error.message : error);
+    }
+    
+    return null;
   }
 
   private static async getSubtitlesWithYtdl(url: string): Promise<string | null> {
@@ -310,36 +491,75 @@ export class YouTubeService {
     const captionTracks = info.player_response?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
     
     if (!captionTracks || captionTracks.length === 0) {
+      console.log('⚠️ ytdl-core: 未找到字幕軌道');
       return null;
     }
+
+    console.log(`🔍 ytdl-core: 找到 ${captionTracks.length} 個字幕軌道:`, 
+      captionTracks.map(t => `${t.languageCode} (${t.name?.simpleText || 'unknown'})`).join(', ')
+    );
 
     // Find English or first available subtitle track
     const track = captionTracks.find(t => t.languageCode === 'en') || captionTracks[0];
     if (!track || !track.baseUrl) {
+      console.log('⚠️ ytdl-core: 未找到可用的字幕軌道或基礎URL');
       return null;
     }
 
-    // 優先獲取 VTT 格式以避免 rolling captions 重複問題
-    const subtitleUrl = track.baseUrl.includes('?') 
-      ? `${track.baseUrl}&fmt=vtt`
-      : `${track.baseUrl}?fmt=vtt`;
+    // Try multiple format options
+    const formatOptions = ['vtt', 'srv3', 'ttml'];
     
-    console.log('📥 獲取字幕 (ytdl):', { 
-      languageCode: track.languageCode,
-      format: 'VTT (clean)',
-      url: subtitleUrl.substring(0, 100) + '...'
-    });
+    for (const fmt of formatOptions) {
+      try {
+        const subtitleUrl = track.baseUrl.includes('?') 
+          ? `${track.baseUrl}&fmt=${fmt}`
+          : `${track.baseUrl}?fmt=${fmt}`;
+        
+        console.log(`📥 嘗試獲取字幕 (ytdl-core ${fmt} 格式):`, { 
+          languageCode: track.languageCode,
+          format: fmt.toUpperCase(),
+          url: subtitleUrl.substring(0, 120) + '...'
+        });
 
-    const response = await fetch(subtitleUrl);
-    const content = await response.text();
-    
-    // 檢查是否為 XML timedText 格式
-    if (content.includes('<transcript>')) {
-      console.log('📋 檢測到 timedText XML 格式，需要特殊解析');
-      return content; // 將在 SubtitleService 中處理
+        const response = await fetch(subtitleUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        
+        if (!response.ok) {
+          console.log(`⚠️ ytdl-core HTTP ${response.status}: ${response.statusText} (${fmt} 格式)`);
+          continue;
+        }
+        
+        const content = await response.text();
+        
+        if (!content || content.length < 10) {
+          console.log(`⚠️ ytdl-core 空內容或內容過短 (${fmt} 格式):`, content.length);
+          continue;
+        }
+        
+        console.log(`✅ ytdl-core 成功獲取字幕 (${fmt} 格式):`, {
+          length: content.length,
+          preview: content.substring(0, 100).replace(/\n/g, '\\n')
+        });
+        
+        // 檢查是否為 XML timedText 格式
+        if (content.includes('<transcript>') || content.includes('<timedtext>')) {
+          console.log('📋 ytdl-core 檢測到 timedText XML 格式，需要特殊解析');
+          return content; // 將在 SubtitleService 中處理
+        }
+        
+        return content;
+        
+      } catch (error) {
+        console.log(`❌ ytdl-core ${fmt} 格式獲取失敗:`, error instanceof Error ? error.message : error);
+        continue;
+      }
     }
     
-    return content;
+    console.log('❌ ytdl-core: 所有格式都失敗');
+    return null;
   }
 
   static async downloadVideo(url: string): Promise<Buffer> {

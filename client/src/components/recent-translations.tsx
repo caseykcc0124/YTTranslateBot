@@ -166,6 +166,28 @@ export default function RecentTranslations({ onVideoSelect }: RecentTranslations
     },
   });
 
+  // 清除所有影片和任務
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", "/api/videos/clear-all");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.setQueryData(["/api/videos"], []);
+      toast({
+        title: "清除成功",
+        description: "所有影片和相關數據已刪除",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "清除失敗",
+        description: error.message || "無法清除所有影片",
+        variant: "destructive",
+      });
+    },
+  });
+
   // 取消處理中的任務
   const cancelTaskMutation = useMutation({
     mutationFn: async (videoId: string) => {
@@ -313,6 +335,41 @@ export default function RecentTranslations({ onVideoSelect }: RecentTranslations
             >
               🔄 刷新
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={clearAllMutation.isPending}
+                >
+                  {clearAllMutation.isPending ? (
+                    <>
+                      <i className="fas fa-spinner animate-spin mr-2"></i>
+                      清除中...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-exclamation-triangle mr-2"></i>
+                      清除所有
+                    </>
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>確定要清除所有翻譯內容和任務嗎？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    這個操作將會永久刪除所有已翻譯的影片、字幕和任務，無法復原。確定要繼續嗎？
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
+                    確定清除
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
 

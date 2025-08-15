@@ -29,6 +29,11 @@ interface EnhancedTranslationConfig {
   stylePreference: string;
   customStylePrompt?: string;
   
+  // 關鍵字配置
+  enableKeywordExtraction: boolean;
+  enableAIKeywordExtraction: boolean;
+  userKeywords: string[];
+  
   // 字幕合併設置
   enableSubtitleMerging: boolean;
   enableCompleteSentenceMerging: boolean;

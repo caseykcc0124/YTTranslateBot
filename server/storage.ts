@@ -15,6 +15,7 @@ export interface IStorage {
   getAllVideos(): Promise<Video[]>;
   deleteVideo(id: string): Promise<boolean>;
   deleteVideoAndRelatedData(id: string): Promise<boolean>;
+  deleteAllVideosAndRelatedData(): Promise<number>;
   
   // Subtitles
   getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]>;
@@ -34,6 +35,7 @@ export interface IStorage {
     oldestCacheAge: string;
   }>;
   cleanupExpiredSubtitles(maxAgeHours: number): Promise<number>;
+  clearAllSubtitles(): Promise<number>;
 
   // Translation Tasks
   createTranslationTask(task: InsertTranslationTask): Promise<TranslationTask>;
@@ -182,6 +184,16 @@ export class MemStorage implements IStorage {
     return videoDeleted;
   }
 
+  async deleteAllVideosAndRelatedData(): Promise<number> {
+    const count = this.videos.size;
+    this.videos.clear();
+    this.subtitles.clear();
+    this.translationTasks.clear();
+    this.segmentTasks.clear();
+    this.taskNotifications.clear();
+    return count;
+  }
+
   // Subtitles
   async getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]> {
     return Array.from(this.subtitles.values()).filter(
@@ -324,6 +336,12 @@ export class MemStorage implements IStorage {
     }
 
     return cleanedCount;
+  }
+
+  async clearAllSubtitles(): Promise<number> {
+    const count = this.subtitles.size;
+    this.subtitles.clear();
+    return count;
   }
 
   // Translation Tasks

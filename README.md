@@ -168,6 +168,53 @@ DEBUG_POLLING=true npm run dev
 - `/api/notifications/*` - 通知系統
 - `/api/cache/*` - 快取管理
 
+## 🛠️ 故障排除
+
+### 字幕提取問題
+
+如果遇到系統報告「沒有字幕」但影片確實有字幕的情況：
+
+**問題症狀**：
+- 系統顯示 `hasOriginalSubtitles: true` 但字幕提取失敗
+- yt-dlp 報告權限錯誤（`EACCES`）
+- @distube/ytdl-core 返回空結果
+
+**解決方案**：
+
+1. **檢查 yt-dlp 權限**：
+```bash
+# 檢查權限
+ls -la ./yt-dlp
+
+# 如果沒有執行權限，修復：
+chmod +x ./yt-dlp
+```
+
+2. **驗證字幕提取**：
+```bash
+# 手動測試 yt-dlp
+./yt-dlp --sub-langs en --skip-download [YouTube_URL]
+```
+
+3. **檢查服務器日誌**：
+開發模式下查看詳細的字幕提取日誌，包括：
+- 字幕軌道檢測
+- 多格式嘗試（VTT、SRV3、TTML）
+- HTTP 響應狀態
+
+**已修復的問題**：
+- ✅ 新增 YouTube Transcript API 作為主要字幕提取方法
+- ✅ yt-dlp 執行權限問題
+- ✅ 改善多種字幕格式支持
+- ✅ 增強錯誤處理和日誌記錄
+- ✅ 添加適當的 User-Agent 標頭
+- ✅ 實現階層式回退機制：YouTube Transcript API → yt-dlp → @distube/ytdl-core → ytdl-core
+
+**字幕提取優先順序**：
+1. **YouTube Transcript API**（首選）- 最穩定可靠
+2. **yt-dlp**（次選）- 權限修復後的後備方案
+3. **@distube/ytdl-core** 和 **ytdl-core**（最後選擇）- 兼容性後備
+
 ## 🔒 安全特性
 
 - **資料庫驅動的 API 密鑰管理**：所有 API 密鑰安全存儲在資料庫中

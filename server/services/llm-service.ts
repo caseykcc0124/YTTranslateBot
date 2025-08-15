@@ -287,6 +287,25 @@ export class LLMService implements ILLMService {
     
     // 10. 清理多餘的空白字符
     cleaned = cleaned.trim();
+
+    // 11. 迭代並修復未閉合的字符串
+    let inString = false;
+    let repaired = '';
+    for (let i = 0; i < cleaned.length; i++) {
+      const char = cleaned[i];
+      if (char === '"' && (i === 0 || cleaned[i - 1] !== '\\')) {
+        inString = !inString;
+      }
+      if (inString && char === '\n') {
+        repaired += '"';
+        inString = false;
+      }
+      repaired += char;
+    }
+    if (inString) {
+      repaired += '"';
+    }
+    cleaned = repaired;
     
     console.log("🔧 增強機械修復完成，長度:", cleaned.length);
     return cleaned;

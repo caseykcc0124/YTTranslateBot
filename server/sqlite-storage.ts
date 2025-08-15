@@ -316,6 +316,19 @@ export class SQLiteStorage implements IStorage {
     return transaction();
   }
 
+  async deleteAllVideosAndRelatedData(): Promise<number> {
+    const transaction = this.db.transaction(() => {
+      this.db.exec('DELETE FROM task_notifications');
+      this.db.exec('DELETE FROM segment_tasks');
+      this.db.exec('DELETE FROM translation_tasks');
+      this.db.exec('DELETE FROM subtitles');
+      const result = this.db.exec('DELETE FROM videos');
+      return result.changes;
+    });
+    
+    return transaction();
+  }
+
   // 字幕
   async getSubtitlesByVideoId(videoId: string): Promise<Subtitle[]> {
     const stmt = this.db.prepare('SELECT * FROM subtitles WHERE video_id = ?');
@@ -614,6 +627,12 @@ export class SQLiteStorage implements IStorage {
     `);
     
     const result = stmt.run(cutoffDate.toISOString());
+    return result.changes;
+  }
+
+  async clearAllSubtitles(): Promise<number> {
+    const stmt = this.db.prepare('DELETE FROM subtitles');
+    const result = stmt.run();
     return result.changes;
   }
 

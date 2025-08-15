@@ -7,6 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface CacheStats {
   totalCachedTranslations: number;
@@ -68,6 +79,29 @@ const CacheManager = () => {
     },
     onError: (error: any) => {
       toast.error(`清理快取失敗: ${error.message}`);
+    },
+  });
+
+  // 清除所有快取 mutation
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/cache/clear-all", {
+        method: "POST",
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "清除所有快取失敗");
+      }
+      
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(`成功清除 ${data.clearedCount} 個快取項目`);
+      queryClient.invalidateQueries({ queryKey: ["/api/cache/stats"] });
+    },
+    onError: (error: any) => {
+      toast.error(`清除所有快取失敗: ${error.message}`);
     },
   });
 
@@ -348,6 +382,42 @@ const CacheManager = () => {
                   </>
                 )}
               </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={clearAllMutation.isPending}
+                  >
+                    {clearAllMutation.isPending ? (
+                      <>
+                        <i className="fas fa-spinner animate-spin mr-2"></i>
+                        清除中...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-exclamation-triangle mr-2"></i>
+                        清除所有快取
+                      </>
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>確定要清除所有快取嗎？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      這個操作將會永久刪除所有已翻譯的字幕快取，無法復原。確定要繼續嗎？
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearAllMutation.mutate()}>
+                      確定清除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
 
             <Separator />

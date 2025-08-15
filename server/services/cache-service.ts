@@ -292,6 +292,18 @@ export class CacheService {
     }
   }
 
+  static async clearAllCache(): Promise<number> {
+    try {
+      console.log("🗑️ 清除所有快取...");
+      const clearedCount = await storage.clearAllSubtitles();
+      console.log(`✅ 成功清除 ${clearedCount} 個快取項目`);
+      return clearedCount;
+    } catch (error) {
+      console.error("❌ 清除所有快取時發生錯誤:", error);
+      return 0;
+    }
+  }
+
   /**
    * 獲取快取統計資訊
    */

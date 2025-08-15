@@ -333,6 +333,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 清除所有影片和相關數據 (必須在動態路由之前)
+  app.delete("/api/videos/clear-all", async (req, res) => {
+    try {
+      console.log("🗑️ API: 清除所有影片和相關數據請求");
+      
+      const clearedCount = await storage.deleteAllVideosAndRelatedData();
+      
+      res.json({ 
+        success: true, 
+        message: "已成功清除所有影片和相關數據",
+        clearedCount,
+      });
+    } catch (error) {
+      console.error("❌ 清除所有影片失敗:", error);
+      res.status(500).json({ error: "清除所有影片失敗" });
+    }
+  });
+
   // 刪除影片
   app.delete("/api/videos/:id", async (req, res) => {
     try {
@@ -758,6 +776,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("❌ 清理快取失敗:", error);
       res.status(500).json({ error: "清理快取失敗" });
+    }
+  });
+
+  // 清除所有快取端點
+  app.post("/api/cache/clear-all", async (req, res) => {
+    try {
+      console.log(`🗑️ API: 清除所有快取請求`);
+      
+      const clearedCount = await CacheService.clearAllCache();
+      
+      res.json({ 
+        success: true, 
+        message: "已成功清除所有快取",
+        clearedCount,
+      });
+    } catch (error) {
+      console.error("❌ 清除所有快取失敗:", error);
+      res.status(500).json({ error: "清除所有快取失敗" });
     }
   });
 
